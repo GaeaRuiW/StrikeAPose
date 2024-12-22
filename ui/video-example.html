@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Streaming Test</title>
+</head>
+<body>
+    <h1>Test Video Streaming</h1>
+
+    <!-- 视频播放器 -->
+    <video id="videoPlayer" controls width="600">
+        <source id="videoSource" type="video/mp4">
+        Your browser does not support the video tag.
+    </video>
+
+    <script>
+        const videoPlayer = document.getElementById('videoPlayer');
+        const videoSource = document.getElementById('videoSource');
+
+        const userId = 1; // Example user_id
+        const videoId = 2; // Example video_id
+        const baseUrl = 'http://localhost:8000/api/v1/videos/stream/original'; // Your API base URL
+
+        // 设置视频源并播放
+        function setupVideoSource() {
+            // 设置视频源 URL
+            videoSource.src = `${baseUrl}/${userId}/${videoId}`;
+            videoPlayer.load(); // 加载视频
+            videoPlayer.play(); // 播放视频
+        }
+
+        // 调用函数来设置视频源并播放
+        setupVideoSource();
+    </script>
+</body>
+</html>

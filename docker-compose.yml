@@ -1,0 +1,70 @@
+services:
+  # backend:
+  #   build:
+  #     context: .
+  #     dockerfile: ./backend/Dockerfile
+  #   ports:
+  #     - "8000:8000"
+  #   depends_on:
+  #     - db
+  #     - redis
+  #   environment:
+  #     - POSTGRES_HOST=pose-postgres
+  #     - POSTGRES_PASSWORD=postgres
+  #     - REDIS_HOST=pose-redis
+
+  #   container_name: pose-backend
+  #   networks:
+  #     - strike
+  #   restart: always
+  #   volumes:
+  #     - /data/pose/videos:/data/videos
+  #     - /root/StrikeAPose/backend:/app
+  # queue:
+  #   build:
+  #     context: .
+  #     dockerfile: ./queue_service/Dockerfile
+  #   depends_on:
+  #     - db
+  #     - redis
+  #   environment:
+  #     - REDIS_HOST=pose-redis
+  #     - CORE_SERVICE_HOST=TODO
+  #     - BACKEND_SERVICE_HOST=post-backend
+  #   container_name: pose-queue
+  #   networks:
+  #     - strike
+  #   restart: always
+  db:
+    image: postgres:14
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=pose
+    container_name: pose-postgres
+    networks:
+      - strike
+    restart: always
+    volumes:
+      - /data/pose/db:/var/lib/postgresql/data
+  adminer:
+    image: adminer
+    ports:
+      - "8080:8080"
+    container_name: adminer
+    networks:
+      - strike
+    restart: always
+  redis:
+    image: redis:7.4
+    ports:
+      - "6379:6379"
+    container_name: pose-redis
+    command: redis-server --slaveof no one --slave-read-only no --save 60 1 
+    volumes:
+      - /data/pose/redis:/data
+    restart: always
+networks:
+  strike:
+    driver: bridge

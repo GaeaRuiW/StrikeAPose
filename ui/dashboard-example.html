@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts/dist/echarts.min.js"></script>
+    <style>
+        .chart-container {
+            width: 100%;
+            max-width: 800px;
+            margin: 20px auto;
+        }
+
+        .chart {
+            width: 100%;
+            height: 400px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Dashboard</h1>
+    
+    <div class="chart-container">
+        <h2>髋关节角度范围</h2>
+        <div id="stepHipDegreeChart" class="chart"></div>
+    </div>
+    
+    <div class="chart-container">
+        <h2>步长</h2>
+        <div id="stepLengthChart" class="chart"></div>
+    </div>
+    
+    <div class="chart-container">
+        <h2>步速</h2>
+        <div id="speedChart" class="chart"></div>
+    </div>
+    
+    <div class="chart-container">
+        <h2>步幅</h2>
+        <div id="stepStrideChart" class="chart"></div>
+    </div>
+    
+    <div class="chart-container">
+        <h2>步长差异</h2>
+        <div id="stepDifferenceChart" class="chart"></div>
+    </div>
+
+    <script>
+        const actionId = 2; // Replace with the appropriate action ID
+        const baseUrl = 'http://localhost:8000/api/v1/dashboard'; // Update to match your backend URL
+
+        const fetchAndRenderChart = (endpoint, chartId, title) => {
+            axios.get(`${baseUrl}/${endpoint}/${actionId}`)
+                .then(response => {
+                    const chartData = JSON.parse(response.data);
+                    const chart = echarts.init(document.getElementById(chartId));
+                    chart.setOption(chartData);
+                })
+                .catch(error => {
+                    console.error(`Error fetching data for ${title}:`, error);
+                });
+        };
+
+        // Render charts
+        fetchAndRenderChart('step_hip_degree', 'stepHipDegreeChart', '髋关节角度重叠区域');
+        fetchAndRenderChart('step_length', 'stepLengthChart', '步长');
+        fetchAndRenderChart('step_speed', 'speedChart', '步速');
+        fetchAndRenderChart('step_stride', 'stepStrideChart', '步幅');
+        fetchAndRenderChart('step_difference', 'stepDifferenceChart', '步长差异');
+    </script>
+</body>
+</html>
