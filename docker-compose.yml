@@ -1,36 +1,36 @@
 services:
-  # backend:
-  #   build:
-  #     context: .
-  #     dockerfile: ./backend/Dockerfile
-  #   ports:
-  #     - "8000:8000"
-  #   depends_on:
-  #     - db
-  #     - redis
-  #   environment:
-  #     - POSTGRES_HOST=pose-postgres
-  #     - POSTGRES_PASSWORD=postgres
-  #     - REDIS_HOST=pose-redis
+  backend:
+    build:
+      context: .
+      dockerfile: ./backend/Dockerfile
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+      - redis-db
+    environment:
+      - POSTGRES_HOST=db
+      - POSTGRES_PASSWORD=postgres
+      - REDIS_HOST=redis-db
 
-  #   container_name: pose-backend
-  #   networks:
-  #     - strike
-  #   restart: always
-  #   volumes:
-  #     - /data/pose/videos:/data/videos
-  #     - /root/StrikeAPose/backend:/app
+    container_name: pose-backend
+    networks:
+      - strike
+    restart: always
+    volumes:
+      - /data/pose/videos:/data/videos
+      # - /root/StrikeAPose/backend:/app
   # queue:
   #   build:
   #     context: .
   #     dockerfile: ./queue_service/Dockerfile
   #   depends_on:
   #     - db
-  #     - redis
+  #     - redis-db
   #   environment:
-  #     - REDIS_HOST=pose-redis
+  #     - REDIS_HOST=redis-db
   #     - CORE_SERVICE_HOST=TODO
-  #     - BACKEND_SERVICE_HOST=post-backend
+  #     - BACKEND_SERVICE_HOST=backend
   #   container_name: pose-queue
   #   networks:
   #     - strike
@@ -56,7 +56,7 @@ services:
     networks:
       - strike
     restart: always
-  redis:
+  redis-db:
     image: redis:7.4
     ports:
       - "6379:6379"
@@ -65,6 +65,8 @@ services:
     volumes:
       - /data/pose/redis:/data
     restart: always
+    networks:
+      - strike
 networks:
   strike:
     driver: bridge
