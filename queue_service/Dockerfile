@@ -4,4 +4,4 @@ WORKDIR /app
 COPY ./queue_service/requirements.txt /app/requirements.txt
 RUN pip install -r requirements.txt
 COPY ./queue_service /app
-CMD ["python", "app.py"]
+CMD ["./entrypoint.sh"]
