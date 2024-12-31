@@ -37,7 +37,7 @@ async def upload_video(user_id: int, video: UploadFile = File(...), session: Ses
               create_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"), update_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
     session.add(new_video)
     session.commit()
-    return {"message": "Video uploaded successfully"}
+    return {"message": "Video uploaded successfully", "video_id": new_video.id}
 
 
 @router.get("/stream/{video_type}/{user_id}/{video_id}")
