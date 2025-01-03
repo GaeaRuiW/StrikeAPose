@@ -55,7 +55,12 @@ def get_step_hip_degree_overlap(action_id: int, session: SessionDep = SessionDep
         xaxis_opts=opts.AxisOpts(
             type_="category", boundary_gap=False, axislabel_opts=opts.LabelOpts(rotate=90)
         ),
-        yaxis_opts=opts.AxisOpts(type_="value"),
+        yaxis_opts=opts.AxisOpts(
+            type_="value",
+            name="度",
+            name_location="end",
+            name_gap=15
+        ),
         toolbox_opts=opts.ToolboxOpts(feature=toolbox_opts),
         datazoom_opts=[
             opts.DataZoomOpts(
@@ -143,7 +148,12 @@ def get_step_length(action_id: int, session: SessionDep = SessionDep):
                 range_start=0,
                 range_end=min(get_length_to_show() - 1, len(x_data)),
             )
-        ]
+        ],
+        yaxis_opts=opts.AxisOpts(
+            name="像素",
+            name_location="end",
+            name_gap=15
+        )
     )
     return line.dump_options_with_quotes()
 
@@ -218,7 +228,12 @@ def get_speed(action_id: int, session: SessionDep = SessionDep):
                 range_start=0,
                 range_end=min(get_length_to_show() - 1, len(x_data)),
             )
-        ]
+        ],
+        yaxis_opts=opts.AxisOpts(
+            name="像素/秒",
+            name_location="end",
+            name_gap=15
+        )
     )
     return line.dump_options_with_quotes()
 
@@ -286,7 +301,13 @@ def get_step_stride(action_id: int, session: SessionDep = SessionDep):
                 range_start=0,
                 range_end=min(get_length_to_show() - 1, len(x_data)),
             )
-        ]
+        ],
+        yaxis_opts=opts.AxisOpts(
+            name="像素",
+            name_location="end",
+            name_gap=15,
+            axislabel_opts=opts.LabelOpts(rotate=90)
+        )
     )
     return line.dump_options_with_quotes()
 
@@ -351,7 +372,13 @@ def get_step_difference(action_id: int, session: SessionDep = SessionDep):
                 range_start=0,
                 range_end=min(get_length_to_show() - 1, len(x_data)),
             )
-        ]
+        ],
+        yaxis_opts=opts.AxisOpts(
+            name="像素",
+            name_location="end",
+            name_gap=15,
+            axislabel_opts=opts.LabelOpts(rotate=90)
+        )
     )
     return line.dump_options_with_quotes()
 
