@@ -12,6 +12,8 @@ class StepsInfo(SQLModel, table=True):
     step_length: float
     step_speed: float
     front_leg: str
+    support_time: float
+    liftoff_height: float
     hip_min_degree: float
     hip_max_degree: float
     first_step: bool
