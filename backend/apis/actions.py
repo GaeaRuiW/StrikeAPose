@@ -18,6 +18,8 @@ class StepsInfoData(BaseModel):
     step_length: float
     step_speed: float
     front_leg: str
+    support_time: float
+    liftoff_height: float
     hip_min_degree: float
     hip_max_degree: float
     first_step: bool
@@ -117,6 +119,7 @@ async def update_action(data: UpdateAction = Body(...), session: SessionDep = Se
                                      front_leg=step_info.front_leg, hip_min_degree=step_info.hip_min_degree,
                                      hip_max_degree=step_info.hip_max_degree, first_step=step_info.first_step,
                                      steps_diff=step_info.steps_diff, stride_length=step_info.stride_length,
+                                     support_time=step_info.support_time, liftoff_height=step_info.liftoff_height,
                                      is_deleted=False, create_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"), update_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
             session.add(step_info_db)
     session.commit()
