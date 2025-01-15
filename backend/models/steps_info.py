@@ -23,7 +23,7 @@ class StepsInfo(SQLModel, table=True):
     update_time: str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     is_deleted: bool
 
-    def __init__(self, stage_id: int, step_id: int, start_frame: int, end_frame: int, step_length: float, step_speed: float, front_leg: str, hip_min_degree: float, hip_max_degree: float, first_step: bool, steps_diff: float, stride_length: float, create_time: str, update_time: str, is_deleted: bool):
+    def __init__(self, stage_id: int, step_id: int, start_frame: int, end_frame: int, step_length: float, step_speed: float, front_leg: str, support_time: float, liftoff_height: float, hip_min_degree: float, hip_max_degree: float, first_step: bool, steps_diff: float, stride_length: float, create_time: str, update_time: str, is_deleted: bool):
         self.stage_id = stage_id
         self.step_id = step_id
         self.start_frame = start_frame
@@ -31,6 +31,8 @@ class StepsInfo(SQLModel, table=True):
         self.step_length = step_length
         self.step_speed = step_speed
         self.front_leg = front_leg
+        self.support_time = support_time
+        self.liftoff_height = liftoff_height
         self.hip_min_degree = hip_min_degree
         self.hip_max_degree = hip_max_degree
         self.first_step = first_step
@@ -50,6 +52,8 @@ class StepsInfo(SQLModel, table=True):
             "step_length": self.step_length,
             "step_speed": self.step_speed,
             "front_leg": self.front_leg,
+            "support_time": self.support_time,
+            "liftoff_height": self.liftoff_height,
             "hip_min_degree": self.hip_min_degree,
             "hip_max_degree": self.hip_max_degree,
             "first_step": self.first_step,
