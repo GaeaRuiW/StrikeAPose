@@ -196,11 +196,11 @@ def get_speed(action_id: int, session: SessionDep = SessionDep):
         for step_info in steps_info:
             x_data.append(f"第{step}步")
             if step_info.front_leg == "left":
-                y_left_data.append(round(step_info.step_speed, 2))
+                y_left_data.append(round(step_info.step_speed * 1000, 2))
                 y_right_data.append(None)
             else:
                 y_left_data.append(None)
-                y_right_data.append(round(step_info.step_speed, 2))
+                y_right_data.append(round(step_info.step_speed * 1000, 2))
             step += 1
     line = Line(init_opts=opts.InitOpts(theme=ThemeType.DARK))
     line.add_xaxis(xaxis_data=x_data)
@@ -278,13 +278,13 @@ def get_step_stride(action_id: int, session: SessionDep = SessionDep):
             #     step += 1
             #     continue
             x_data.append(f"第{step}步")
-            y_data.append(round(step_info.stride_length, 2))
+            y_data.append(round(step_info.stride_length * 1000, 2))
             step += 1
     line = Line()
     line.add_xaxis(xaxis_data=x_data)
     line.add_yaxis(series_name="步幅", y_axis=y_data, is_smooth=True)
     line.set_global_opts(
-        title_opts=opts.TitleOpts(title="=步幅"),
+        title_opts=opts.TitleOpts(title="步幅"),
         xaxis_opts=opts.AxisOpts(axislabel_opts=opts.LabelOpts(rotate=90)),
         toolbox_opts=opts.ToolboxOpts(feature=toolbox_opts),
         datazoom_opts=[
@@ -350,7 +350,7 @@ def get_step_difference(action_id: int, session: SessionDep = SessionDep):
             #     step += 1
             #     continue
             x_data.append(f"第{step} - {step + 1}步")
-            y_data.append(round(step_info.steps_diff, 2))
+            y_data.append(round(step_info.steps_diff * 1000, 2))
             step += 1
     line = Line()
     line.add_xaxis(xaxis_data=x_data)
