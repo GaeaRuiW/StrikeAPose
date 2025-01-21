@@ -5,6 +5,7 @@ from common.utils import get_redis_connection
 from fastapi import APIRouter, Body
 from models import Action, SessionDep, Stage, StepsInfo, VideoPath
 from pydantic import BaseModel
+from common.utils import get_redis_connection
 
 
 class CreateAction(BaseModel):
@@ -38,9 +39,14 @@ class UpdateAction(BaseModel):
     action_id: int
     data: Optional[List[UpdateActionData]]
 
+class UpdateActionStatus(BaseModel):
+    action_id: int
+    status: str
+    action: str
+
 
 router = APIRouter(tags=["actions"], prefix="/actions")
-
+redis_conn = get_redis_connection()
 
 @router.post("/")
 async def create_action(action: CreateAction = Body(...), session: SessionDep = SessionDep):
@@ -127,13 +133,17 @@ async def update_action(data: UpdateAction = Body(...), session: SessionDep = Se
 
 
 @router.post("/update_action_status")
-async def update_action_status(action_id: int, status: str, session: SessionDep = SessionDep):
+async def update_action_status(action_status: UpdateActionStatus, session: SessionDep = SessionDep):
+    action_id = action_status.action_id
+    status = action_status.status
+    action_name = action_status.action
+    if status != "running":
+        redis_conn.lrem("running_actions", 0, action_name)
     action = session.query(Action).filter(
         Action.id == action_id, Action.is_deleted == False).first()
     if not action:
         return {"message": "Action not found"}
     action.status = status
     action.update_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    session.update(action)
     session.commit()
     return {"message": "Action status updated successfully"}
