@@ -18,14 +18,11 @@ async def upload_video(user_id: int, video: UploadFile = File(...), session: Ses
         return {"message": "User not found"}
     if not video.content_type.startswith("video/"):
         return {"message": "Invalid file type"}
-    
-    if not os.path.exists(video_dir):
-        os.makedirs(video_dir)
 
     file_size = 0
     chunk_size = 1024 * 1024
     gen_uuid = uuid.uuid4().hex[:8]
-    video_path = f"{video_dir}/{user_id}-{video.filename}-{gen_uuid}.mp4"
+    video_path = f"{video_dir}/original/{user_id}-{video.filename}-{gen_uuid}.mp4"
     with open(video_path, "wb") as f:
         while True:
             chunk = await video.read(chunk_size)
@@ -34,7 +31,7 @@ async def upload_video(user_id: int, video: UploadFile = File(...), session: Ses
             file_size += len(chunk)
             f.write(chunk)
     new_video = VideoPath(video_path=video_path, user_id=user_id, original_video=True, inference_video=False, is_deleted=False,
-              create_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"), update_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+                          create_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"), update_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
     session.add(new_video)
     session.commit()
     return {"message": "Video uploaded successfully", "video_id": new_video.id}
@@ -86,3 +83,24 @@ async def get_videos(user_id: int, session: SessionDep = SessionDep):
     videos = session.query(VideoPath).filter(
         VideoPath.user_id == user_id and VideoPath.is_deleted == False).all()
     return {"videos": [video.to_dict() for video in videos]}
+
+
+@router.get("/get_video_by_id/{video_id}")
+async def get_video_by_id(video_id: int, session: SessionDep = SessionDep):
+    video = session.query(VideoPath).filter(
+        VideoPath.id == video_id and VideoPath.is_deleted == False).first()
+    return video.to_dict() if video else {"message": "Video not found"}
+
+
+@router.post("/insert_inference_video/{action_id}")
+async def insert_inference_video(action_id: int, session: SessionDep = SessionDep):
+    video = session.query(VideoPath).filter(
+        VideoPath.action_id == action_id and VideoPath.is_deleted == False).first()
+    if not video:
+        return {"message": "Video not found"}
+    new_video_path = video.video_path.replace("original", "inference")
+    new_video = VideoPath(video_path=new_video_path, user_id=video.user_id, original_video=False, inference_video=True, is_deleted=False,
+                          create_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"), update_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+    session.add(new_video)
+    session.commit()
+    return {"message": "Inference video inserted successfully", "video_id": new_video.id}

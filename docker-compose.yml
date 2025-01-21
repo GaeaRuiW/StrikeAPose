@@ -20,21 +20,43 @@ services:
     volumes:
       - /data/pose/videos:/data/videos
       # - /root/StrikeAPose/backend:/app
-  # queue:
-  #   build:
-  #     context: .
-  #     dockerfile: ./queue_service/Dockerfile
-  #   depends_on:
-  #     - db
-  #     - redis-db
-  #   environment:
-  #     - REDIS_HOST=redis-db
-  #     - CORE_SERVICE_HOST=TODO
-  #     - BACKEND_SERVICE_HOST=backend
-  #   container_name: pose-queue
-  #   networks:
-  #     - strike
-  #   restart: always
+  queue:
+    build:
+      context: .
+      dockerfile: ./queue_service/Dockerfile
+    depends_on:
+      - db
+      - redis-db
+      - backend
+    environment:
+      - REDIS_HOST=redis-db
+      - CORE_SERVICE_HOST=core
+      - BACKEND_HOST=backend
+    container_name: pose-queue
+    # network_mode: host 
+    networks:
+      - strike
+    restart: always
+  core:
+    image: gaeawang/strikeapose-core:0.0.1
+    ports:
+      - "8001:8001"
+    depends_on:
+      - db
+      - redis-db
+      - backend
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - BACKEND_HOST=backend
+    container_name: pose-core
+    networks:
+      - strike
+    restart: always
+    volumes:
+      - /data/pose/videos:/data/videos
+      - ./core:/workspace
+    command: python app.py
+    runtime: nvidia
   db:
     image: postgres:14
     ports:

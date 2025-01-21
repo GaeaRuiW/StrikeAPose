@@ -2,11 +2,12 @@ from apis.actions import router as action_router
 from apis.dashboard import router as dashboard_router
 from apis.users import router as user_router
 from apis.videos import router as video_router
-from config import listen_port
+from config import listen_port, video_dir
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from models import create_db_and_tables
+import os
 
 app = FastAPI()
 
@@ -35,6 +36,10 @@ async def jwt_exception_handler(request, exc):
 
 @app.on_event("startup")
 async def startup_event():
+    if not os.path.exists(f"{video_dir}/original"):
+        os.makedirs(f"{video_dir}/original")
+    if not os.path.exists(f"{video_dir}/inference"):
+        os.makedirs(f"{video_dir}/inference")
     create_db_and_tables()
 
 if __name__ == "__main__":
