@@ -104,6 +104,8 @@ async def delete_action(action_id: int, session: SessionDep = SessionDep):
             step_info.update_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             session.add(step_info)
     session.commit()
+    redis_conn.lrem("waiting_actions", 0, f"{action.user_id}-{action_id}-{action.video_id}")
+    redis_conn.lrem("running_actions", 0, f"{action.user_id}-{action_id}-{action.video_id}")
     return {"message": "Action deleted successfully"}
 
 

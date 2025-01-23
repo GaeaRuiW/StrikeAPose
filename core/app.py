@@ -2,6 +2,7 @@ import os
 import warnings
 from threading import Thread
 
+import cv2
 import requests
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -17,6 +18,36 @@ update_action_url = f"http://{backend_host}:8000/api/v1/actions/update_action"
 update_action_status_url = f"http://{backend_host}:8000/api/v1/actions/update_action_status"
 insert_inference_video_url = f"http://{backend_host}:8000/api/v1/videos/insert_inference_video"
 
+def flip_video(video_path):
+    print("flipping video")
+    cap = cv2.VideoCapture(video_path)
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    file_extension = os.path.splitext(video_path)[1].lower()
+    codec_map = {
+        '.mp4': 'mp4v',  # MP4 文件
+        '.avi': 'XVID',  # AVI 文件
+        '.mov': 'avc1',  # MOV 文件（H.264）
+        '.mkv': 'X264',  # MKV 文件（H.264）
+        '.flv': 'FLV1',  # FLV 文件
+        '.wmv': 'WMV2',  # WMV 文件
+        '.webm': 'VP80',  # WebM 文件（VP8 编码）
+        '.mpeg': 'MPEG',  # MPEG 文件
+    }
+    
+    fourcc_code = codec_map.get(file_extension, 'mp4v')
+    fourcc = cv2.VideoWriter_fourcc(*fourcc_code)
+    out = cv2.VideoWriter(video_path.replace('original', 'flipped'), fourcc, fps, (int(cap.get(3)), int(cap.get(4))))
+    while cap.isOpened():
+        ret, frame = cap.read()
+        if not ret:
+            break
+        frame = cv2.flip(frame, 1)
+        out.write(frame)
+    cap.release()
+    out.release()
+    cv2.destroyAllWindows()
+    print("flipping video done")
+    return video_path.replace('original', 'flipped')
 
 class InferenceRequest(BaseModel):
     action_id: int
@@ -58,11 +89,12 @@ async def inference_api(inference_request: InferenceRequest):
     differece_frames = int(inference_request.diff)
     num_circle = int(inference_request.num_circle)
     smooth_sigma = int(inference_request.smooth_sigma)
-    vis = True if inference_request.vis else False
+    vis = bool(inference_request.vis)
 
     def inference_thread():
         try:
-            result = inference(video_path, output_path,
+            flipped_video_path = flip_video(video_path)
+            result = inference(flipped_video_path, output_path,
                                differece_frames, smooth_sigma, num_circle, vis)
             if result is not None:
                 data = {
