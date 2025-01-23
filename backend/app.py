@@ -38,6 +38,8 @@ async def jwt_exception_handler(request, exc):
 async def startup_event():
     if not os.path.exists(f"{video_dir}/original"):
         os.makedirs(f"{video_dir}/original")
+    if not os.path.exists(f"{video_dir}/flipped"):
+        os.makedirs(f"{video_dir}/flipped")
     if not os.path.exists(f"{video_dir}/inference"):
         os.makedirs(f"{video_dir}/inference")
     create_db_and_tables()
