@@ -84,6 +84,18 @@ async def get_videos(user_id: int, session: SessionDep = SessionDep):
         VideoPath.user_id == user_id and VideoPath.is_deleted == False).all()
     return {"videos": [video.to_dict() for video in videos]}
 
+@router.get("/get_inference_video_by_original_id/{original_video_id}")
+async def get_video_by_original(original_video_id: int, session: SessionDep = SessionDep):
+    video = session.query(VideoPath).filter(
+        VideoPath.id == original_video_id and VideoPath.is_deleted == False).first()
+    video_path = video.video_path
+    video_path = video_path.replace("original", "inference")
+    reference_video = session.query(VideoPath).filter(
+        VideoPath.video_path == video_path,
+        VideoPath.original_video == False,
+        VideoPath.inference_video == True,
+        VideoPath.is_deleted == False).first()
+    return reference_video.to_dict() if reference_video else {"message": "Reference video not found"}
 
 @router.get("/get_video_by_id/{video_id}")
 async def get_video_by_id(video_id: int, session: SessionDep = SessionDep):
@@ -99,7 +111,7 @@ async def insert_inference_video(action_id: int, session: SessionDep = SessionDe
     if not video:
         return {"message": "Video not found"}
     new_video_path = video.video_path.replace("original", "inference")
-    new_video = VideoPath(video_path=new_video_path, user_id=video.user_id, original_video=False, inference_video=True, is_deleted=False,
+    new_video = VideoPath(video_path=new_video_path, user_id=video.user_id, original_video=False, inference_video=True, is_deleted=False, action_id=action_id,
                           create_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"), update_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
     session.add(new_video)
     session.commit()
