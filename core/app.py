@@ -9,8 +9,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from rtmpose_trt_inference import *
-from steps_analysis import *
+# from rtmpose_trt_inference import *
+from rtmpose_inference import *
 
 warnings.filterwarnings("ignore")
 backend_host = os.getenv("BACKEND_HOST", "127.0.0.1")
@@ -46,16 +46,16 @@ def flip_video(video_path):
     cap.release()
     out.release()
     cv2.destroyAllWindows()
-    print("flipping video done")
+    print("video flipped")
     return video_path.replace('original', 'flipped')
 
 class InferenceRequest(BaseModel):
     action_id: int
     video_path: str
     action: str
-    diff: int = 3
+    diff: int = 1
     num_circle: int = 3
-    smooth_sigma: int = 15
+    smooth_sigma: int = 20
     vis: bool = True
 
 
@@ -93,8 +93,8 @@ async def inference_api(inference_request: InferenceRequest):
 
     def inference_thread():
         try:
-            flipped_video_path = flip_video(video_path)
-            result = inference(flipped_video_path, output_path,
+            # flipped_video_path = flip_video(video_path)
+            result = inference(video_path, output_path,
                                differece_frames, smooth_sigma, num_circle, vis)
             if result is not None:
                 data = {

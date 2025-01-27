@@ -60,7 +60,7 @@ def filter_outliers(df, z_scores_threshold=10, IQR_coefficient=7.5):
 
 
 def read_csv(csv_path):
-    data = pd.read_csv(csv_path)
+    data = pd.read_csv(csv_path, index_col=False)
     no_outliers_data = filter_outliers(data)
     return no_outliers_data
 
@@ -196,6 +196,7 @@ def modified_peaks(df, peaks, valleys, threshold=0.6):
     peaks.extend(valleys)
     peaks.sort()
     distance = calculate_frame_len_avg(df, peaks)
+    diff_mean = np.mean([df["ankle_diff"][peaks[i]] - df["ankle_diff"][peaks[i + 1]] for i in range(len(peaks) - 2)])
     # print(peaks)
 
     new_peaks = []
@@ -203,7 +204,7 @@ def modified_peaks(df, peaks, valleys, threshold=0.6):
         if not new_peaks:
             new_peaks.append(p)
         else:
-            if p - new_peaks[-1] > distance * threshold:
+            if p - new_peaks[-1] > distance * threshold and abs(df["ankle_diff"][p] - df["ankle_diff"][new_peaks[-1]]) >= diff_mean:
                 new_peaks.append(p)
 
     return new_peaks
@@ -416,12 +417,12 @@ def main_analysis(csv, smooth_sigma=20, num_circle=3, stage_gap_dis=200):
     stage_idx = split_stages(peaks, valleys)
     step_detail = analysis_circle(smooth_data, stage_idx)
 
-    with open(csv.replace(".csv", "_results.json"), "w") as o:
-        json.dump(step_detail, o, indent=4)
+    # with open(csv.replace(".csv", "_results.json"), "w") as o:
+    #     json.dump(step_detail, o, indent=4)
 
-    # print(step_detail)
+    print(step_detail)
     return step_detail
 
 
 if __name__ == '__main__':
-    main_analysis("72_raw.csv")
+    main_analysis("/home/zhaosilei/Projects/PycharmProjects/mmlab/mmpose-1.3.1/tools/workdirs/rtmpose-m_coco25/output/73_raw.csv")

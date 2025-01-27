@@ -44,8 +44,8 @@ async def stream_video(video_type: str, user_id: int, video_id: int, session: Se
     video = session.query(VideoPath).filter(
         VideoPath.id == video_id,
         VideoPath.user_id == user_id,
-        VideoPath.original_video == True if video_type == "original" else False,
-        VideoPath.inference_video == True if video_type == "inference" else False,
+        VideoPath.original_video == (video_type == "original"),
+        VideoPath.inference_video == (video_type == "inference"),
         VideoPath.is_deleted == False
     ).first()
 
