@@ -342,6 +342,9 @@ def inference(video_path, output_root, difference_bet_frame=3, smooth_sigma=20, 
         overwrite_video(video_path, output_root,
                         f"{os.path.join(output_root, os.path.splitext(os.path.basename(video_path))[0])}.csv",
                         diff=difference_bet_frame)
+        out_video = f"{os.path.join(output_root, os.path.splitext(os.path.basename(video_path))[0])}.mp4"
+        os.system(f"ffmpeg -i {out_video} -c:v libx264 -c:a aac {out_video.replace('.mp4', '_final.mp4')}")
+        os.system(f"mv -f {out_video.replace('.mp4', '_final.mp4')} {out_video}")
     try:
         analysis_result = steps_analysis.main_analysis(
             f"{os.path.join(output_root, os.path.splitext(os.path.basename(video_path))[0])}.csv",

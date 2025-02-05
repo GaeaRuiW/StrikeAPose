@@ -18,6 +18,8 @@ async def upload_video(user_id: int, video: UploadFile = File(...), session: Ses
         return {"message": "User not found"}
     if not video.content_type.startswith("video/"):
         return {"message": "Invalid file type"}
+    if not video.filename.endswith(".mp4"):
+        return {"message": "Only mp4 files are allowed"}
 
     file_size = 0
     chunk_size = 1024 * 1024
