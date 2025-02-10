@@ -61,24 +61,26 @@ def get_step_hip_degree_overlap(action_id: int, session: SessionDep = SessionDep
             name_gap=15
         ),
         toolbox_opts=opts.ToolboxOpts(feature=toolbox_opts),
-        datazoom_opts=[
-            opts.DataZoomOpts(
-                type_="slider",
-                xaxis_index=0,
-                start_value=0,
-                end_value=min(get_length_to_show() - 1, len(x_data)),
-                range_start=0,
-                range_end=min(get_length_to_show() - 1, len(x_data)),
-            ),
-            opts.DataZoomOpts(
-                type_="inside",
-                xaxis_index=0,
-                start_value=0,
-                end_value=min(get_length_to_show() - 1, len(x_data)),
-                range_start=0,
-                range_end=min(get_length_to_show() - 1, len(x_data)),
-            )
-        ]
+        # datazoom_opts=[
+        #     opts.DataZoomOpts(
+        #         type_="slider",
+        #         xaxis_index=0,
+        #         start_value=0,
+        #         end_value=min(get_length_to_show() - 1, len(x_data)),
+        #         range_start=0,
+        #         range_end=min(get_length_to_show() - 1, len(x_data)),
+        #     ),
+        #     opts.DataZoomOpts(
+        #         type_="inside",
+        #         xaxis_index=0,
+        #         start_value=0,
+        #         # end_value=min(get_length_to_show() - 1, len(x_data)),
+        #         end_value=len(x_data),
+        #         range_start=0,
+        #         # range_end=min(get_length_to_show() - 1, len(x_data)),
+        #         range_end=len(x_data)
+        #     )
+        # ]
     )
     return line.dump_options_with_quotes()
 
@@ -132,24 +134,28 @@ def get_step_length(action_id: int, session: SessionDep = SessionDep):
         title_opts=opts.TitleOpts(title="步长"),
         xaxis_opts=opts.AxisOpts(axislabel_opts=opts.LabelOpts(rotate=90)),
         toolbox_opts=opts.ToolboxOpts(feature=toolbox_opts),
-        datazoom_opts=[
-            opts.DataZoomOpts(
-                type_="slider",
-                xaxis_index=0,
-                start_value=0,
-                end_value=min(get_length_to_show() - 1, len(x_data)),
-                range_start=0,
-                range_end=min(get_length_to_show() - 1, len(x_data)),
-            ),
-            opts.DataZoomOpts(
-                type_="inside",
-                xaxis_index=0,
-                start_value=0,
-                end_value=min(get_length_to_show() - 1, len(x_data)),
-                range_start=0,
-                range_end=min(get_length_to_show() - 1, len(x_data)),
-            )
-        ],
+        # datazoom_opts=[
+        #     opts.DataZoomOpts(
+        #         type_="slider",
+        #         xaxis_index=0,
+        #         start_value=0,
+        #         # end_value=min(get_length_to_show() - 1, len(x_data)),
+        #         end_value=len(x_data),
+        #         range_start=0,
+        #         # range_end=min(get_length_to_show() - 1, len(x_data)),
+        #         range_end=len(x_data)
+        #     ),
+        #     opts.DataZoomOpts(
+        #         type_="inside",
+        #         xaxis_index=0,
+        #         start_value=0,
+        #         # end_value=min(get_length_to_show() - 1, len(x_data)),
+        #         end_value=len(x_data),
+        #         range_start=0,
+        #         # range_end=min(get_length_to_show() - 1, len(x_data)),
+        #         range_end=len(x_data)
+        #     )
+        # ],
         yaxis_opts=opts.AxisOpts(
             name="米",
             name_location="end",
@@ -213,24 +219,28 @@ def get_speed(action_id: int, session: SessionDep = SessionDep):
         xaxis_opts=opts.AxisOpts(
             axislabel_opts=opts.LabelOpts(rotate=90)),
         toolbox_opts=opts.ToolboxOpts(feature=toolbox_opts),
-        datazoom_opts=[
-            opts.DataZoomOpts(
-                type_="slider",
-                xaxis_index=0,
-                start_value=0,
-                end_value=min(get_length_to_show() - 1, len(x_data)),
-                range_start=0,
-                range_end=min(get_length_to_show() - 1, len(x_data)),
-            ),
-            opts.DataZoomOpts(
-                type_="inside",
-                xaxis_index=0,
-                start_value=0,
-                end_value=min(get_length_to_show() - 1, len(x_data)),
-                range_start=0,
-                range_end=min(get_length_to_show() - 1, len(x_data)),
-            )
-        ],
+        # datazoom_opts=[
+        #     opts.DataZoomOpts(
+        #         type_="slider",
+        #         xaxis_index=0,
+        #         start_value=0,
+        #         # end_value=min(get_length_to_show() - 1, len(x_data)),
+        #         end_value=len(x_data),
+        #         range_start=0,
+        #         # range_end=min(get_length_to_show() - 1, len(x_data)),
+        #         range_end=len(x_data)
+        #     ),
+        #     opts.DataZoomOpts(
+        #         type_="inside",
+        #         xaxis_index=0,
+        #         start_value=0,
+        #         # end_value=min(get_length_to_show() - 1, len(x_data)),
+        #         end_value=len(x_data),
+        #         range_start=0,
+        #         # range_end=min(get_length_to_show() - 1, len(x_data)),
+        #         range_end=len(x_data)
+        #     )
+        # ],
         yaxis_opts=opts.AxisOpts(
             name="米/秒",
             name_location="end",
@@ -287,24 +297,28 @@ def get_step_stride(action_id: int, session: SessionDep = SessionDep):
         title_opts=opts.TitleOpts(title="步幅"),
         xaxis_opts=opts.AxisOpts(axislabel_opts=opts.LabelOpts(rotate=90)),
         toolbox_opts=opts.ToolboxOpts(feature=toolbox_opts),
-        datazoom_opts=[
-            opts.DataZoomOpts(
-                type_="slider",
-                xaxis_index=0,
-                start_value=0,
-                end_value=min(get_length_to_show() - 1, len(x_data)),
-                range_start=0,
-                range_end=min(get_length_to_show() - 1, len(x_data)),
-            ),
-            opts.DataZoomOpts(
-                type_="inside",
-                xaxis_index=0,
-                start_value=0,
-                end_value=min(get_length_to_show() - 1, len(x_data)),
-                range_start=0,
-                range_end=min(get_length_to_show() - 1, len(x_data)),
-            )
-        ],
+        # datazoom_opts=[
+        #     opts.DataZoomOpts(
+        #         type_="slider",
+        #         xaxis_index=0,
+        #         start_value=0,
+        #         # end_value=min(get_length_to_show() - 1, len(x_data)),
+        #         end_value=len(x_data),
+        #         range_start=0,
+        #         # range_end=min(get_length_to_show() - 1, len(x_data)),
+        #         range_end=len(x_data)
+        #     ),
+        #     opts.DataZoomOpts(
+        #         type_="inside",
+        #         xaxis_index=0,
+        #         start_value=0,
+        #         # end_value=min(get_length_to_show() - 1, len(x_data)),
+        #         end_value=len(x_data),
+        #         range_start=0,
+        #         # range_end=min(get_length_to_show() - 1, len(x_data)),
+        #         range_end=len(x_data)
+        #     )
+        # ],
         yaxis_opts=opts.AxisOpts(
             name="米",
             name_location="end",
@@ -359,24 +373,28 @@ def get_step_difference(action_id: int, session: SessionDep = SessionDep):
         title_opts=opts.TitleOpts(title="步长差"),
         xaxis_opts=opts.AxisOpts(axislabel_opts=opts.LabelOpts(rotate=90)),
         toolbox_opts=opts.ToolboxOpts(feature=toolbox_opts),
-        datazoom_opts=[
-            opts.DataZoomOpts(
-                type_="slider",
-                xaxis_index=0,
-                start_value=0,
-                end_value=min(get_length_to_show() - 1, len(x_data)),
-                range_start=0,
-                range_end=min(get_length_to_show() - 1, len(x_data)),
-            ),
-            opts.DataZoomOpts(
-                type_="inside",
-                xaxis_index=0,
-                start_value=0,
-                end_value=min(get_length_to_show() - 1, len(x_data)),
-                range_start=0,
-                range_end=min(get_length_to_show() - 1, len(x_data)),
-            )
-        ],
+        # datazoom_opts=[
+        #     opts.DataZoomOpts(
+        #         type_="slider",
+        #         xaxis_index=0,
+        #         start_value=0,
+        #         # end_value=min(get_length_to_show() - 1, len(x_data)),
+        #         end_value=len(x_data),
+        #         range_start=0,
+        #         # range_end=min(get_length_to_show() - 1, len(x_data)),
+        #         range_end=len(x_data)
+        #     ),
+        #     opts.DataZoomOpts(
+        #         type_="inside",
+        #         xaxis_index=0,
+        #         start_value=0,
+        #         # end_value=min(get_length_to_show() - 1, len(x_data)),
+        #         end_value=len(x_data),
+        #         range_start=0,
+        #         # range_end=min(get_length_to_show() - 1, len(x_data)),
+        #         range_end=len(x_data)
+        #     )
+        # ],
         yaxis_opts=opts.AxisOpts(
             name="米",
             name_location="end",
@@ -428,24 +446,28 @@ def get_support_time(action_id: int, session: SessionDep = SessionDep):
         title_opts=opts.TitleOpts(title="支撑时间"),
         xaxis_opts=opts.AxisOpts(axislabel_opts=opts.LabelOpts(rotate=90)),
         toolbox_opts=opts.ToolboxOpts(feature=toolbox_opts),
-        datazoom_opts=[
-            opts.DataZoomOpts(
-                type_="slider",
-                xaxis_index=0,
-                start_value=0,
-                end_value=min(get_length_to_show() - 1, len(x_data)),
-                range_start=0,
-                range_end=min(get_length_to_show() - 1, len(x_data)),
-            ),
-            opts.DataZoomOpts(
-                type_="inside",
-                xaxis_index=0,
-                start_value=0,
-                end_value=min(get_length_to_show() - 1, len(x_data)),
-                range_start=0,
-                range_end=min(get_length_to_show() - 1, len(x_data)),
-            )
-        ],
+        # datazoom_opts=[
+        #     opts.DataZoomOpts(
+        #         type_="slider",
+        #         xaxis_index=0,
+        #         start_value=0,
+        #         # end_value=min(get_length_to_show() - 1, len(x_data)),
+        #         end_value=len(x_data),
+        #         range_start=0,
+        #         # range_end=min(get_length_to_show() - 1, len(x_data)),
+        #         range_end=len(x_data)
+        #     ),
+        #     opts.DataZoomOpts(
+        #         type_="inside",
+        #         xaxis_index=0,
+        #         start_value=0,
+        #         # end_value=min(get_length_to_show() - 1, len(x_data)),
+        #         end_value=len(x_data),
+        #         range_start=0,
+        #         # range_end=min(get_length_to_show() - 1, len(x_data)),
+        #         range_end=len(x_data)
+        #     )
+        # ],
         yaxis_opts=opts.AxisOpts(
             name="秒",
             name_location="end",
@@ -494,24 +516,28 @@ def get_liftoff_height(action_id: int, session: SessionDep = SessionDep):
         title_opts=opts.TitleOpts(title="离地距离"),
         xaxis_opts=opts.AxisOpts(axislabel_opts=opts.LabelOpts(rotate=90)),
         toolbox_opts=opts.ToolboxOpts(feature=toolbox_opts),
-        datazoom_opts=[
-            opts.DataZoomOpts(
-                type_="slider",
-                xaxis_index=0,
-                start_value=0,
-                end_value=min(get_length_to_show() - 1, len(x_data)),
-                range_start=0,
-                range_end=min(get_length_to_show() - 1, len(x_data)),
-            ),
-            opts.DataZoomOpts(
-                type_="inside",
-                xaxis_index=0,
-                start_value=0,
-                end_value=min(get_length_to_show() - 1, len(x_data)),
-                range_start=0,
-                range_end=min(get_length_to_show() - 1, len(x_data)),
-            )
-        ],
+        # datazoom_opts=[
+        #     opts.DataZoomOpts(
+        #         type_="slider",
+        #         xaxis_index=0,
+        #         start_value=0,
+        #         # end_value=min(get_length_to_show() - 1, len(x_data)),
+        #         end_value=len(x_data),
+        #         range_start=0,
+        #         # range_end=min(get_length_to_show() - 1, len(x_data)),
+        #         range_end=len(x_data)
+        #     ),
+        #     opts.DataZoomOpts(
+        #         type_="inside",
+        #         xaxis_index=0,
+        #         start_value=0,
+        #         # end_value=min(get_length_to_show() - 1, len(x_data)),
+        #         end_value=len(x_data),
+        #         range_start=0,
+        #         # range_end=min(get_length_to_show() - 1, len(x_data)),
+        #         range_end=len(x_data)
+        #     )
+        # ],
         yaxis_opts=opts.AxisOpts(
             name="米",
             name_location="end",
