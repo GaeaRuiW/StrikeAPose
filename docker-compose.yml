@@ -19,7 +19,7 @@ services:
     restart: always
     volumes:
       - /data/pose/videos:/data/videos
-      # - /root/StrikeAPose/backend:/app
+      - ./backend:/app
   queue:
     build:
       context: .
