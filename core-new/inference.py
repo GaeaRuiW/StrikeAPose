@@ -8,13 +8,13 @@ from ultralytics import YOLO
 from check_point import get_featurepoints2, caculate_output
 
 ## 13-16 左膝 右膝 左踝 右踝
-def main(input_vedio_file,out_vedio_file,out_json_file):
+def main(input_vedio_file,out_video_file,out_json_file):
     current_file_path = os.path.abspath(__file__)
     current_dir = os.path.dirname(current_file_path)
     model_path = current_dir + '/yolov8x-pose.pt'
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
     fps = 30.0
-    video = cv2.VideoWriter(out_vedio_file, fourcc, fps, (1280, 720))
+    video = cv2.VideoWriter(out_video_file, fourcc, fps, (1280, 720))
     model = YOLO(model_path)
     cap = cv2.VideoCapture(input_vedio_file)
     data = []
@@ -50,11 +50,13 @@ def main(input_vedio_file,out_vedio_file,out_json_file):
             video.write(frame)
     video.release()
     cv2.destroyAllWindows()
-    caculate_output(key_points,np.array(data),out_json_file)
+    os.system(f"ffmpeg -i {out_video_file} -c:v libx264 -c:a aac {out_video_file.replace('.mp4', '_final.mp4')}")
+    os.system(f"mv -f {out_video_file.replace('.mp4', '_final.mp4')} {out_video_file}")
+    return caculate_output(key_points,np.array(data),out_json_file)
 
 if __name__ == "__main__":
     if len(sys.argv) != 4:
-        print(f"command 1.inference 2.input_vedio_file,3.out_vedio_file,4.out_json_file")
+        print(f"command 1.inference 2.input_vedio_file,3.out_video_file,4.out_json_file")
         sys.exit(-1)
     main(sys.argv[1],sys.argv[2],sys.argv[3])
 
