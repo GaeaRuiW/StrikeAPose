@@ -19,11 +19,12 @@ class StepsInfo(SQLModel, table=True):
     first_step: bool
     steps_diff: float
     stride_length: float
+    step_width: float
     create_time: str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     update_time: str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     is_deleted: bool
 
-    def __init__(self, stage_id: int, step_id: int, start_frame: int, end_frame: int, step_length: float, step_speed: float, front_leg: str, support_time: float, liftoff_height: float, hip_min_degree: float, hip_max_degree: float, first_step: bool, steps_diff: float, stride_length: float, create_time: str, update_time: str, is_deleted: bool):
+    def __init__(self, stage_id: int, step_id: int, start_frame: int, end_frame: int, step_length: float, step_speed: float, front_leg: str, support_time: float, liftoff_height: float, hip_min_degree: float, hip_max_degree: float, first_step: bool, steps_diff: float, stride_length: float, step_width: float, create_time: str, update_time: str, is_deleted: bool):
         self.stage_id = stage_id
         self.step_id = step_id
         self.start_frame = start_frame
@@ -38,6 +39,7 @@ class StepsInfo(SQLModel, table=True):
         self.first_step = first_step
         self.steps_diff = steps_diff
         self.stride_length = stride_length
+        self.step_width = step_width
         self.create_time = create_time
         self.update_time = update_time
         self.is_deleted = is_deleted
@@ -59,6 +61,7 @@ class StepsInfo(SQLModel, table=True):
             "first_step": self.first_step,
             "steps_diff": self.steps_diff,
             "stride_length": self.stride_length,
+            "step_width": self.step_width,
             "create_time": self.create_time,
             "update_time": self.update_time,
             "is_deleted": self.is_deleted
