@@ -79,7 +79,9 @@ async def inference_api(inference_request: InferenceRequest):
     output_video_path = video_path.replace('original', 'inference')
     output_json_path = output_video_path.replace('mp4', 'json')
     action = inference_request.action
-
+    print("original video path: ", video_path)
+    print("output video path: ", output_video_path)
+    print("output json path: ", output_json_path)
     def inference_thread():
         try:
             # flipped_video_path = flip_video(video_path)

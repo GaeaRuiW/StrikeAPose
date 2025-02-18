@@ -377,6 +377,7 @@ def caculate_output(key_points4, datas, out_file):
     with open(out_file, 'w') as json_file:
         json.dump(out_info, json_file, indent=4, default=default_serializer)
     print("end!")
+    return out_info
 
 
 if __name__ == "__main__":
