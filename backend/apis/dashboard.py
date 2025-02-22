@@ -104,9 +104,7 @@ def get_step_hip_degree_raw(action_id: int, session: SessionDep = SessionDep):
     return {"x_data": x_data, "y_low_data": y_low_data, "y_high_data": y_high_data}
 
 
-router.get("/step_width/{action_id}")
-
-
+@router.get("/step_width/{action_id}")
 def get_step_width(action_id: int, session: SessionDep = SessionDep):
     x_data = []
     y_data = []
@@ -166,7 +164,7 @@ def get_step_width_raw(action_id: int, session: SessionDep = SessionDep):
             StepsInfo.stage_id == stage.id, StepsInfo.is_deleted == False).all()
         for step_info in steps_info:
             x_data.append(f"第{step}步")
-            y_data.append(round(step_info.step_width * 100, 2))
+            y_data.append(round(step_info.step_width, 2))
             step += 1
     return {"x_data": x_data, "y_data": y_data}
 
@@ -185,11 +183,11 @@ def get_step_length(action_id: int, session: SessionDep = SessionDep):
         for step_info in steps_info:
             x_data.append(f"第{step}步")
             if step_info.front_leg == "left":
-                y_left.append(round(step_info.step_length, 2))
+                y_left.append(round(step_info.step_length * 100, 2))
                 y_right.append(None)
             else:
                 y_left.append(None)
-                y_right.append(round(step_info.step_length, 2))
+                y_right.append(round(step_info.step_length * 100, 2))
             step += 1
     line = Line(init_opts=opts.InitOpts(theme=ThemeType.DARK))
     line.add_xaxis(xaxis_data=x_data)
@@ -224,7 +222,7 @@ def get_step_length(action_id: int, session: SessionDep = SessionDep):
         #     )
         # ],
         yaxis_opts=opts.AxisOpts(
-            name="米",
+            name="厘米",
             name_location="end",
             name_gap=15
         )
@@ -269,11 +267,11 @@ def get_speed(action_id: int, session: SessionDep = SessionDep):
         for step_info in steps_info:
             x_data.append(f"第{step}步")
             if step_info.front_leg == "left":
-                y_left_data.append(round(step_info.step_speed * 1000, 2))
+                y_left_data.append(round(step_info.step_speed * 100, 2))
                 y_right_data.append(None)
             else:
                 y_left_data.append(None)
-                y_right_data.append(round(step_info.step_speed * 1000, 2))
+                y_right_data.append(round(step_info.step_speed * 100, 2))
             step += 1
     line = Line(init_opts=opts.InitOpts(theme=ThemeType.DARK))
     line.add_xaxis(xaxis_data=x_data)
@@ -309,7 +307,7 @@ def get_speed(action_id: int, session: SessionDep = SessionDep):
         #     )
         # ],
         yaxis_opts=opts.AxisOpts(
-            name="米/秒",
+            name="厘米/秒",
             name_location="end",
             name_gap=15
         )
@@ -355,7 +353,7 @@ def get_step_stride(action_id: int, session: SessionDep = SessionDep):
             #     step += 1
             #     continue
             x_data.append(f"第{step}步")
-            y_data.append(round(step_info.stride_length * 1000, 2))
+            y_data.append(round(step_info.stride_length * 100, 2))
             step += 1
     line = Line()
     line.add_xaxis(xaxis_data=x_data)
@@ -387,7 +385,7 @@ def get_step_stride(action_id: int, session: SessionDep = SessionDep):
         #     )
         # ],
         yaxis_opts=opts.AxisOpts(
-            name="米",
+            name="厘米",
             name_location="end",
             name_gap=15,
             axislabel_opts=opts.LabelOpts(rotate=90)
@@ -431,7 +429,7 @@ def get_step_difference(action_id: int, session: SessionDep = SessionDep):
             #     step += 1
             #     continue
             x_data.append(f"第{step} - {step + 1}步")
-            y_data.append(round(step_info.steps_diff * 1000, 2))
+            y_data.append(round(step_info.steps_diff * 100, 2))
             step += 1
     line = Line()
     line.add_xaxis(xaxis_data=x_data)
@@ -463,7 +461,7 @@ def get_step_difference(action_id: int, session: SessionDep = SessionDep):
         #     )
         # ],
         yaxis_opts=opts.AxisOpts(
-            name="米",
+            name="厘米",
             name_location="end",
             name_gap=15,
             axislabel_opts=opts.LabelOpts(rotate=90)
@@ -574,7 +572,7 @@ def get_liftoff_height(action_id: int, session: SessionDep = SessionDep):
             StepsInfo.stage_id == stage.id, StepsInfo.is_deleted == False).all()
         for step_info in steps_info:
             x_data.append(f"第{step}步")
-            y_data.append(round(step_info.liftoff_height, 2))
+            y_data.append(round(step_info.liftoff_height * 100, 2))
             step += 1
     line = Line()
     line.add_xaxis(xaxis_data=x_data)
@@ -606,7 +604,7 @@ def get_liftoff_height(action_id: int, session: SessionDep = SessionDep):
         #     )
         # ],
         yaxis_opts=opts.AxisOpts(
-            name="米",
+            name="厘米",
             name_location="end",
             name_gap=15,
             axislabel_opts=opts.LabelOpts(rotate=90)
