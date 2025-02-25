@@ -6,6 +6,11 @@ import cv2
 import matplotlib.pyplot as plt
 import numpy as np
 
+def default_serializer(obj):
+    if isinstance(obj, np.float32):
+        return float(obj)
+    raise TypeError(f"Object of type {obj.__class__.__name__} is not JSON serializable")
+
 
 def diff_non_zero(arr):
     # 过滤出非零值
@@ -394,8 +399,9 @@ def caculate_output(key_points4, datas, out_file):
         out_info.append(out_info_one_stage)
 
     with open(out_file, 'w') as json_file:
-        json.dump(out_info, json_file, indent=4)
+        json.dump(out_info, json_file, indent=4, default=default_serializer)
     print("end!")
+    return out_info
 
 
 if __name__ == "__main__":

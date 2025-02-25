@@ -73,7 +73,7 @@ def main(input_vedio_file, out_video_file, out_json_file):
             f"ffmpeg -i {out_video_file} -c:v libx264 -c:a aac {out_video_file.replace('.mp4', '_final.mp4')}")
         os.system(
             f"mv -f {out_video_file.replace('.mp4', '_final.mp4')} {out_video_file}")
-        caculate_output(key_points, np.array(data), out_json_file)
+        return caculate_output(key_points, np.array(data), out_json_file)
 
 
 if __name__ == "__main__":
