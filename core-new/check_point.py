@@ -7,13 +7,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
-def default_serializer(obj):
-    if isinstance(obj, np.float32):
-        return float(obj)
-    raise TypeError(
-        f"Object of type {obj.__class__.__name__} is not JSON serializable")
-
-
 def diff_non_zero(arr):
     # 过滤出非零值
     non_zero_values = [i for i in arr if i != 0]
@@ -139,33 +132,55 @@ def caculate_output(key_points4, datas, out_file):
         if right1[-i] - right1[-i - 1] > right1_mean * 1.5:
             right1 = right1[-i:]
             break
-    start = int(max(left1[0], right1[0]) - 1.5 * max(left1_mean, right1_mean))
-
+    start = max(int(max(left1[0], right1[0]) -
+                1.5 * max(left1_mean, right1_mean)), 0)
     left2_mean = (left2[-1] - left2[0]) / (len(left2) - 1)
     for i in range(len(left2) - 1):
         if left2[i + 1] - left2[i] > left2_mean * 1.5:
             left2 = left2[:i + 1]
             break
-
     right2_mean = (right2[-1] - right2[0]) / (len(right2) - 1)
     for i in range(len(right2) - 1):
         if right2[i + 1] - right2[i] > right2_mean * 1.5:
             right2 = right2[:i + 1]
             break
-    end = int(min(right2[-1], left2[-1]) + 1.0 * max(left2_mean, right2_mean))
+    end = min(int(min(right2[-1], left2[-1]) + 1.0 *
+              max(left2_mean, right2_mean)), l_data)
 
     if left1[0] < right1[0] and abs(data[left1[0], 2, 0] - data[start, 2, 0]) < (left2_mean + left1_mean) / 4:
         left1 = left1[1:]
+    for i in range(len(left1)+1):
+        if left1[-i] < start:
+            left1 = left1[-i+1:]
+            break
+
     if left1[0] > right1[0] and abs(data[right1[0], 3, 0] - data[start, 3, 0]) < (right2_mean + right1_mean) / 4:
         right1 = right1[1:]
+    for i in range(len(right1) + 1):
+        if right1[-i] < start:
+            right1 = right1[-i + 1:]
+            break
 
     if left2[-1] > right2[-1] and abs(data[left2[-1], 2, 0] - data[end, 2, 0]) < (left2_mean + left1_mean) / 4:
         left2 = left2[:-1]
+    for i in range(len(left2)):
+        if left2[i] > end:
+            left2 = left2[:i]
+            break
+
     if left2[-1] < right2[-1] and abs(data[right2[-1], 3, 0] - data[end, 3, 0]) < (right2_mean + right1_mean) / 4:
         right2 = right2[:-1]
+    for i in range(len(right2)):
+        if right2[i] > end:
+            right2 = right2[:i]
+            break
 
     if data[index_max_left, 2, 0] > data[index_max_right, 3, 0]:
         index_max_all = index_max_left
+        for i in range(len(left2)+1):
+            if left2[-i] < index_max_all:
+                left2 = left2[-i+1:]
+                break
         left = [start] + left1 + [index_max_left] + left2 + [int(end)]
         # if abs(data[right1[-1], 3, 0] - data[right2[0], 3, 0]) < (right2_mean + right1_mean) / 3:
         if right1[-1] > left1[-1] and right2[0] < left2[0]:
@@ -175,6 +190,10 @@ def caculate_output(key_points4, datas, out_file):
             right = [start] + right1 + right2 + [int(end)]
     else:
         index_max_all = index_max_right
+        for i in range(len(right2)+1):
+            if right2[-i] < index_max_all:
+                right2 = right2[-i+1:]
+                break
         right = [start] + right1 + [index_max_right] + right2 + [int(end)]
         # if abs(data[left1[-1], 2, 0] - data[left2[0], 2, 0]) < (left2_mean + left1_mean) / 3:
         if left1[-1] > right1[-1] and left2[0] < right2[0]:
@@ -375,9 +394,8 @@ def caculate_output(key_points4, datas, out_file):
         out_info.append(out_info_one_stage)
 
     with open(out_file, 'w') as json_file:
-        json.dump(out_info, json_file, indent=4, default=default_serializer)
+        json.dump(out_info, json_file, indent=4)
     print("end!")
-    return out_info
 
 
 if __name__ == "__main__":
