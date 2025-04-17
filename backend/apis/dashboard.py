@@ -1,3 +1,4 @@
+import math
 from common.utils import get_length_to_show
 from fastapi import APIRouter
 from models import SessionDep, Stage, StepsInfo
@@ -630,148 +631,182 @@ def get_liftoff_height_raw(action_id: int, session: SessionDep = SessionDep):
     return {"x_data": x_data, "y_data": y_data}
 
 
-@router.get("/average/step_hip_degree/{action_id}")
-def get_average_step_hip_degree(action_id: int, session: SessionDep = SessionDep):
-    step_hip_degree_low = []
-    step_hip_degree_high = []
-    stages = session.query(Stage).filter(
-        Stage.action_id == action_id, Stage.is_deleted == False).all()
-    for stage in stages:
-        steps_info = session.query(StepsInfo).filter(
-            StepsInfo.stage_id == stage.id, StepsInfo.is_deleted == False).all()
-        for step_info in steps_info:
-            step_hip_degree_low.append(step_info.hip_min_degree)
-            step_hip_degree_high.append(step_info.hip_max_degree)
-    if not step_hip_degree_low or not step_hip_degree_high:
-        return {"low_average": 0, "high_average": 0, "average": 0}
-    low_average = round(sum(step_hip_degree_low) / len(step_hip_degree_low), 2)
-    high_average = round(sum(step_hip_degree_high) /
-                         len(step_hip_degree_high), 2)
-    average = round((sum(step_hip_degree_low) + sum(step_hip_degree_high)) /
-                    (len(step_hip_degree_low) + len(step_hip_degree_high)), 2)
-    return {"low_average": low_average, "high_average": high_average, "average": average}
+# @router.get("/table/step_hip_degree/{action_id}")
+# def get_average_step_hip_degree(action_id: int, session: SessionDep = SessionDep):
+#     step_hip_degree_low = []
+#     step_hip_degree_high = []
+#     stages = session.query(Stage).filter(
+#         Stage.action_id == action_id, Stage.is_deleted == False).all()
+#     for stage in stages:
+#         steps_info = session.query(StepsInfo).filter(
+#             StepsInfo.stage_id == stage.id, StepsInfo.is_deleted == False).all()
+#         for step_info in steps_info:
+#             step_hip_degree_low.append(step_info.hip_min_degree)
+#             step_hip_degree_high.append(step_info.hip_max_degree)
+#     if not step_hip_degree_low or not step_hip_degree_high:
+#         return {"low_average": 0, "high_average": 0, "average": 0}
+#     low_average = round(sum(step_hip_degree_low) / len(step_hip_degree_low), 2)
+#     high_average = round(sum(step_hip_degree_high) /
+#                          len(step_hip_degree_high), 2)
+#     average = round((sum(step_hip_degree_low) + sum(step_hip_degree_high)) /
+#                     (len(step_hip_degree_low) + len(step_hip_degree_high)), 2)
+#     low_standard_deviation = round(
+#         math.sqrt(sum((x - low_average) ** 2 for x in step_hip_degree_low) / len(step_hip_degree_low)), 2)
+#     high_standard_deviation = round(
+#         math.sqrt(sum((x - high_average) ** 2 for x in step_hip_degree_high) / len(step_hip_degree_high)), 2)
+#     standard_deviation = round(
+#         math.sqrt(sum((x - average) ** 2 for x in step_hip_degree_low) / len(step_hip_degree_low)), 2)
+#     return {"low_average": low_average, "high_average": high_average, "average": average, "low_standard_deviation": low_standard_deviation, "high_standard_deviation": high_standard_deviation, "standard_deviation": standard_deviation, "chart_url": f"/dashboard/step_hip_degree/{action_id}"}
 
 
-@router.get("/average/step_length/{action_id}")
-def get_average_step_length(action_id: int, session: SessionDep = SessionDep):
-    left_step_length = []
-    right_step_length = []
-    stages = session.query(Stage).filter(
-        Stage.action_id == action_id, Stage.is_deleted == False).all()
-    for stage in stages:
-        steps_info = session.query(StepsInfo).filter(
-            StepsInfo.stage_id == stage.id, StepsInfo.is_deleted == False).all()
-        for step_info in steps_info:
-            if step_info.front_leg == "left":
-                left_step_length.append(step_info.step_length)
-            else:
-                right_step_length.append(step_info.step_length)
-    if not left_step_length or not right_step_length:
-        return {"left_average": 0, "right_average": 0, "average": 0}
-    left_average = round(sum(left_step_length) / len(left_step_length), 2)
-    right_average = round(sum(right_step_length) / len(right_step_length), 2)
-    average = round((sum(left_step_length) + sum(right_step_length)) /
-                    (len(left_step_length) + len(right_step_length)), 2)
-    return {"left_average": left_average, "right_average": right_average, "average": average}
+# @router.get("/table/step_length/{action_id}")
+# def get_average_step_length(action_id: int, session: SessionDep = SessionDep):
+#     left_step_length = []
+#     right_step_length = []
+#     stages = session.query(Stage).filter(
+#         Stage.action_id == action_id, Stage.is_deleted == False).all()
+#     for stage in stages:
+#         steps_info = session.query(StepsInfo).filter(
+#             StepsInfo.stage_id == stage.id, StepsInfo.is_deleted == False).all()
+#         for step_info in steps_info:
+#             if step_info.front_leg == "left":
+#                 left_step_length.append(step_info.step_length)
+#             else:
+#                 right_step_length.append(step_info.step_length)
+#     if not left_step_length or not right_step_length:
+#         return {"left_average": 0, "right_average": 0, "average": 0}
+#     left_average = round(sum(left_step_length) / len(left_step_length), 2)
+#     right_average = round(sum(right_step_length) / len(right_step_length), 2)
+#     average = round((sum(left_step_length) + sum(right_step_length)) /
+#                     (len(left_step_length) + len(right_step_length)), 2)
+#     left_standard_deviation = round(
+#         math.sqrt(sum((x - left_average) ** 2 for x in left_step_length) / len(left_step_length)), 2)
+#     right_standard_deviation = round(
+#         math.sqrt(sum((x - right_average) ** 2 for x in right_step_length) / len(right_step_length)), 2)
+#     standard_deviation = round(
+#         math.sqrt(sum((x - average) ** 2 for x in left_step_length) / len(left_step_length)), 2)
+#     return {"left_average": left_average, "right_average": right_average, "average": average, "left_standard_deviation": left_standard_deviation, "right_standard_deviation": right_standard_deviation, "standard_deviation": standard_deviation, "chart_url": f"/dashboard/step_length/{action_id}"}
 
 
-@router.get("/average/step_speed/{action_id}")
-def get_average_step_speed(action_id: int, session: SessionDep = SessionDep):
-    left_step_speed = []
-    right_step_speed = []
-    stages = session.query(Stage).filter(
-        Stage.action_id == action_id, Stage.is_deleted == False).all()
-    for stage in stages:
-        steps_info = session.query(StepsInfo).filter(
-            StepsInfo.stage_id == stage.id, StepsInfo.is_deleted == False).all()
-        for step_info in steps_info:
-            if step_info.front_leg == "left":
-                left_step_speed.append(step_info.step_speed)
-            else:
-                right_step_speed.append(step_info.step_speed)
-    if not left_step_speed or not right_step_speed:
-        return {"left_average": 0, "right_average": 0, "average": 0}
-    left_average = round(sum(left_step_speed) / len(left_step_speed), 2)
-    right_average = round(sum(right_step_speed) / len(right_step_speed), 2)
-    average = round((sum(left_step_speed) + sum(right_step_speed)) /
-                    (len(left_step_speed) + len(right_step_speed)), 2)
-    return {"left_average": left_average, "right_average": right_average, "average": average}
+# @router.get("/table/step_speed/{action_id}")
+# def get_average_step_speed(action_id: int, session: SessionDep = SessionDep):
+#     left_step_speed = []
+#     right_step_speed = []
+#     stages = session.query(Stage).filter(
+#         Stage.action_id == action_id, Stage.is_deleted == False).all()
+#     for stage in stages:
+#         steps_info = session.query(StepsInfo).filter(
+#             StepsInfo.stage_id == stage.id, StepsInfo.is_deleted == False).all()
+#         for step_info in steps_info:
+#             if step_info.front_leg == "left":
+#                 left_step_speed.append(step_info.step_speed)
+#             else:
+#                 right_step_speed.append(step_info.step_speed)
+#     if not left_step_speed or not right_step_speed:
+#         return {"left_average": 0, "right_average": 0, "average": 0}
+#     left_average = round(sum(left_step_speed) / len(left_step_speed), 2)
+#     right_average = round(sum(right_step_speed) / len(right_step_speed), 2)
+#     average = round((sum(left_step_speed) + sum(right_step_speed)) /
+#                     (len(left_step_speed) + len(right_step_speed)), 2)
+#     left_standard_deviation = round(
+#         math.sqrt(sum((x - left_average) ** 2 for x in left_step_speed) / len(left_step_speed)), 2)
+#     right_standard_deviation = round(
+#         math.sqrt(sum((x - right_average) ** 2 for x in right_step_speed) / len(right_step_speed)), 2)
+#     standard_deviation = round(
+#         math.sqrt(sum((x - average) ** 2 for x in left_step_speed) / len(left_step_speed)), 2)
+#     return {"left_average": left_average, "right_average": right_average, "average": average, "left_standard_deviation": left_standard_deviation, "right_standard_deviation": right_standard_deviation, "standard_deviation": standard_deviation, "chart_url": f"/dashboard/step_speed/{action_id}"}
 
 
-@router.get("/average/step_stride/{action_id}")
-def get_average_step_stride(action_id: int, session: SessionDep = SessionDep):
-    step_stride = []
-    stages = session.query(Stage).filter(
-        Stage.action_id == action_id, Stage.is_deleted == False).all()
-    for stage in stages:
-        steps_info = session.query(StepsInfo).filter(
-            StepsInfo.stage_id == stage.id, StepsInfo.is_deleted == False, StepsInfo.first_step == False).all()
-        step_stride.extend(step_info.stride_length for step_info in steps_info)
-    if not step_stride:
-        return {"average": 0}
-    average = round(sum(step_stride) / len(step_stride), 2)
-    return {"average": average}
+# @router.get("/table/step_stride/{action_id}")
+# def get_average_step_stride(action_id: int, session: SessionDep = SessionDep):
+#     step_stride = []
+#     stages = session.query(Stage).filter(
+#         Stage.action_id == action_id, Stage.is_deleted == False).all()
+#     for stage in stages:
+#         steps_info = session.query(StepsInfo).filter(
+#             StepsInfo.stage_id == stage.id, StepsInfo.is_deleted == False, StepsInfo.first_step == False).all()
+#         step_stride.extend(step_info.stride_length for step_info in steps_info)
+#     if not step_stride:
+#         return {"average": 0}
+#     average = round(sum(step_stride) / len(step_stride), 2)
+#     standard_deviation = round(
+#         math.sqrt(sum((x - average) ** 2 for x in step_stride) / len(step_stride)), 2)
+#     return {"average": average, "standard_deviation": standard_deviation, "chart_url": f"/dashboard/step_stride/{action_id}"}
 
 
-@router.get("/average/step_difference/{action_id}")
-def get_average_step_difference(action_id: int, session: SessionDep = SessionDep):
-    step_difference = []
-    stages = session.query(Stage).filter(
-        Stage.action_id == action_id, Stage.is_deleted == False).all()
-    for stage in stages:
-        steps_info = session.query(StepsInfo).filter(
-            StepsInfo.stage_id == stage.id, StepsInfo.is_deleted == False, StepsInfo.first_step == False).all()
-        step_difference.extend(
-            step_info.steps_diff for step_info in steps_info)
-    if not step_difference:
-        return {"average": 0}
-    average = round(sum(step_difference) / len(step_difference), 2)
-    return {"average": average}
+# @router.get("/table/step_difference/{action_id}")
+# def get_average_step_difference(action_id: int, session: SessionDep = SessionDep):
+#     step_difference = []
+#     stages = session.query(Stage).filter(
+#         Stage.action_id == action_id, Stage.is_deleted == False).all()
+#     for stage in stages:
+#         steps_info = session.query(StepsInfo).filter(
+#             StepsInfo.stage_id == stage.id, StepsInfo.is_deleted == False, StepsInfo.first_step == False).all()
+#         step_difference.extend(
+#             step_info.steps_diff for step_info in steps_info)
+#     if not step_difference:
+#         return {"average": 0}
+#     average = round(sum(step_difference) / len(step_difference), 2)
+#     standard_deviation = round(
+#         math.sqrt(sum((x - average) ** 2 for x in step_difference) / len(step_difference)), 2)
+#     return {"average": average, "standard_deviation": standard_deviation, "chart_url": f"/dashboard/step_difference/{action_id}"}
 
 
-@router.get("/average/support_time/{action_id}")
-def get_average_support_time(action_id: int, session: SessionDep = SessionDep):
-    left_support_time = []
-    right_support_time = []
-    stages = session.query(Stage).filter(
-        Stage.action_id == action_id, Stage.is_deleted == False).all()
-    for stage in stages:
-        steps_info = session.query(StepsInfo).filter(
-            StepsInfo.stage_id == stage.id, StepsInfo.is_deleted == False).all()
-        for step_info in steps_info:
-            if step_info.front_leg == "left":
-                left_support_time.append(step_info.support_time)
-            else:
-                right_support_time.append(step_info.support_time)
-    if not left_support_time or not right_support_time:
-        return {"left_average": 0, "right_average": 0, "average": 0}
-    left_average = round(sum(left_support_time) / len(left_support_time), 2)
-    right_average = round(sum(right_support_time) / len(right_support_time), 2)
-    average = round((sum(left_support_time) + sum(right_support_time)) /
-                    (len(left_support_time) + len(right_support_time)), 2)
-    return {"left_average": left_average, "right_average": right_average, "average": average}
+# @router.get("/table/support_time/{action_id}")
+# def get_average_support_time(action_id: int, session: SessionDep = SessionDep):
+#     left_support_time = []
+#     right_support_time = []
+#     stages = session.query(Stage).filter(
+#         Stage.action_id == action_id, Stage.is_deleted == False).all()
+#     for stage in stages:
+#         steps_info = session.query(StepsInfo).filter(
+#             StepsInfo.stage_id == stage.id, StepsInfo.is_deleted == False).all()
+#         for step_info in steps_info:
+#             if step_info.front_leg == "left":
+#                 left_support_time.append(step_info.support_time)
+#             else:
+#                 right_support_time.append(step_info.support_time)
+#     if not left_support_time or not right_support_time:
+#         return {"left_average": 0, "right_average": 0, "average": 0}
+#     left_average = round(sum(left_support_time) / len(left_support_time), 2)
+#     right_average = round(sum(right_support_time) / len(right_support_time), 2)
+#     average = round((sum(left_support_time) + sum(right_support_time)) /
+#                     (len(left_support_time) + len(right_support_time)), 2)
+#     left_standard_deviation = round(
+#         math.sqrt(sum((x - left_average) ** 2 for x in left_support_time) / len(left_support_time)), 2)
+#     right_standard_deviation = round(
+#         math.sqrt(sum((x - right_average) ** 2 for x in right_support_time) / len(right_support_time)), 2)
+#     standard_deviation = round(
+#         math.sqrt(sum((x - average) ** 2 for x in left_support_time) / len(left_support_time)), 2)
+#     return {"left_average": left_average, "right_average": right_average, "average": average, "left_standard_deviation": left_standard_deviation, "right_standard_deviation": right_standard_deviation, "standard_deviation": standard_deviation, "chart_url": f"/dashboard/support_time/{action_id}"}
 
 
-@router.get("/average/liftoff_height/{action_id}")
-def get_average_liftoff_height(action_id: int, session: SessionDep = SessionDep):
-    left_liftoff_height = []
-    right_liftoff_height = []
-    stages = session.query(Stage).filter(
-        Stage.action_id == action_id, Stage.is_deleted == False).all()
-    for stage in stages:
-        steps_info = session.query(StepsInfo).filter(
-            StepsInfo.stage_id == stage.id, StepsInfo.is_deleted == False).all()
-        for step_info in steps_info:
-            if step_info.front_leg == "left":
-                left_liftoff_height.append(step_info.liftoff_height)
-            else:
-                right_liftoff_height.append(step_info.liftoff_height)
-    if not left_liftoff_height or not right_liftoff_height:
-        return {"left_average": 0, "right_average": 0, "average": 0}
-    left_average = round(sum(left_liftoff_height) /
-                         len(left_liftoff_height), 2)
-    right_average = round(sum(right_liftoff_height) /
-                          len(right_liftoff_height), 2)
-    average = round((sum(left_liftoff_height) + sum(right_liftoff_height)) /
-                    (len(left_liftoff_height) + len(right_liftoff_height)), 2)
-    return {"left_average": left_average, "right_average": right_average, "average": average}
+# @router.get("/table/liftoff_height/{action_id}")
+# def get_average_liftoff_height(action_id: int, session: SessionDep = SessionDep):
+#     left_liftoff_height = []
+#     right_liftoff_height = []
+#     stages = session.query(Stage).filter(
+#         Stage.action_id == action_id, Stage.is_deleted == False).all()
+#     for stage in stages:
+#         steps_info = session.query(StepsInfo).filter(
+#             StepsInfo.stage_id == stage.id, StepsInfo.is_deleted == False).all()
+#         for step_info in steps_info:
+#             if step_info.front_leg == "left":
+#                 left_liftoff_height.append(step_info.liftoff_height)
+#             else:
+#                 right_liftoff_height.append(step_info.liftoff_height)
+#     if not left_liftoff_height or not right_liftoff_height:
+#         return {"left_average": 0, "right_average": 0, "average": 0}
+#     left_average = round(sum(left_liftoff_height) /
+#                          len(left_liftoff_height), 2)
+#     right_average = round(sum(right_liftoff_height) /
+#                           len(right_liftoff_height), 2)
+#     average = round((sum(left_liftoff_height) + sum(right_liftoff_height)) /
+#                     (len(left_liftoff_height) + len(right_liftoff_height)), 2)
+#     left_standard_deviation = round(
+#         math.sqrt(sum((x - left_average) ** 2 for x in left_liftoff_height) / len(left_liftoff_height)), 2)
+#     right_standard_deviation = round(
+#         math.sqrt(sum((x - right_average) ** 2 for x in right_liftoff_height) / len(right_liftoff_height)), 2)
+#     standard_deviation = round(
+#         math.sqrt(sum((x - average) ** 2 for x in left_liftoff_height) / len(left_liftoff_height)), 2)
+#     return {"left_average": left_average, "right_average": right_average, "average": average, "left_standard_deviation": left_standard_deviation, "right_standard_deviation": right_standard_deviation, "standard_deviation": standard_deviation, "chart_url": f"/dashboard/liftoff_height/{action_id}"}

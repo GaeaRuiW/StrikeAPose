@@ -5,17 +5,17 @@ from datetime import datetime
 from config import video_dir
 from fastapi import APIRouter, File, Request, UploadFile
 from fastapi.responses import StreamingResponse
-from models import SessionDep, Users, VideoPath
+from models import SessionDep, Patients, VideoPath
 
 router = APIRouter(tags=["videos"], prefix="/videos")
 
 
-@router.post("/upload/{user_id}")
-async def upload_video(user_id: int, video: UploadFile = File(...), session: SessionDep = SessionDep):
-    user = session.query(Users).filter(
-        Users.id == user_id and Users.is_deleted == False).first()
-    if not user:
-        return {"message": "User not found"}
+@router.post("/upload/{patient_id}")
+async def upload_video(patient_id: int, video: UploadFile = File(...), session: SessionDep = SessionDep):
+    patient = session.query(Patients).filter(
+        Patients.id == patient_id and Patients.is_deleted == False).first()
+    if not patient:
+        return {"message": "Patient not found"}
     if not video.content_type.startswith("video/"):
         return {"message": "Invalid file type"}
     if not video.filename.endswith(".mp4"):
@@ -24,7 +24,7 @@ async def upload_video(user_id: int, video: UploadFile = File(...), session: Ses
     file_size = 0
     chunk_size = 1024 * 1024
     gen_uuid = uuid.uuid4().hex[:8]
-    video_path = f"{video_dir}/original/{user_id}-{video.filename}-{gen_uuid}.mp4"
+    video_path = f"{video_dir}/original/{patient_id}-{video.filename}-{gen_uuid}.mp4"
     with open(video_path, "wb") as f:
         while True:
             chunk = await video.read(chunk_size)
@@ -32,20 +32,20 @@ async def upload_video(user_id: int, video: UploadFile = File(...), session: Ses
                 break
             file_size += len(chunk)
             f.write(chunk)
-    new_video = VideoPath(video_path=video_path, user_id=user_id, original_video=True, inference_video=False, is_deleted=False,
+    new_video = VideoPath(video_path=video_path, patient_id=patient_id, original_video=True, inference_video=False, is_deleted=False,
                           create_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"), update_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
     session.add(new_video)
     session.commit()
     return {"message": "Video uploaded successfully", "video_id": new_video.id}
 
 
-@router.get("/stream/{video_type}/{user_id}/{video_id}")
-async def stream_video(video_type: str, user_id: int, video_id: int, session: SessionDep = SessionDep, request: Request = None):
+@router.get("/stream/{video_type}/{patient_id}/{video_id}")
+async def stream_video(video_type: str, patient_id: int, video_id: int, session: SessionDep = SessionDep, request: Request = None):
     if video_type not in ["original", "inference"]:
         return {"message": "Invalid video type"}
     video = session.query(VideoPath).filter(
         VideoPath.id == video_id,
-        VideoPath.user_id == user_id,
+        VideoPath.patient_id == patient_id,
         VideoPath.original_video == (video_type == "original"),
         VideoPath.inference_video == (video_type == "inference"),
         VideoPath.is_deleted == False
@@ -80,10 +80,10 @@ async def stream_video(video_type: str, user_id: int, video_id: int, session: Se
     return StreamingResponse(open(video_path, "rb"), media_type="video/mp4")
 
 
-@router.get("/get_videos/{user_id}")
-async def get_videos(user_id: int, session: SessionDep = SessionDep):
+@router.get("/get_videos/{patient_id}")
+async def get_videos(patient_id: int, session: SessionDep = SessionDep):
     videos = session.query(VideoPath).filter(
-        VideoPath.user_id == user_id and VideoPath.is_deleted == False).all()
+        VideoPath.patient_id == patient_id and VideoPath.is_deleted == False).all()
     return {"videos": [video.to_dict() for video in videos]}
 
 @router.get("/get_inference_video_by_original_id/{original_video_id}")
@@ -113,7 +113,7 @@ async def insert_inference_video(action_id: int, session: SessionDep = SessionDe
     if not video:
         return {"message": "Video not found"}
     new_video_path = video.video_path.replace("original", "inference")
-    new_video = VideoPath(video_path=new_video_path, user_id=video.user_id, original_video=False, inference_video=True, is_deleted=False, action_id=action_id,
+    new_video = VideoPath(video_path=new_video_path, patient_id=video.patient_id, original_video=False, inference_video=True, is_deleted=False, action_id=action_id,
                           create_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"), update_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
     session.add(new_video)
     session.commit()

@@ -4,7 +4,8 @@ from models.action import Action
 from models.roles import Roles
 from models.stage import Stage
 from models.steps_info import StepsInfo
-from models.users import Users
+from models.patients import Patients
+from models.doctors import Doctors
 from models.video_path import VideoPath
 from sqlmodel import Session, SQLModel, create_engine
 from typing_extensions import Annotated

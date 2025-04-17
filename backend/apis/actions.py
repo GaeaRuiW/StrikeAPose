@@ -9,7 +9,7 @@ from common.utils import get_redis_connection
 
 
 class CreateAction(BaseModel):
-    user_id: int
+    patient_id: int
     video_id: int
 
 
@@ -52,17 +52,17 @@ redis_conn = get_redis_connection()
 @router.post("/")
 async def create_action(action: CreateAction = Body(...), session: SessionDep = SessionDep):
     video = session.query(VideoPath).filter(VideoPath.id == action.video_id,
-                                            VideoPath.user_id == action.user_id, VideoPath.original_video == True, VideoPath.is_deleted == False).first()
+                                            VideoPath.patient_id == action.patient_id, VideoPath.original_video == True, VideoPath.is_deleted == False).first()
     if not video:
         return {"message": "Video not found"}
-    new_action = Action(user_id=action.user_id,
+    new_action = Action(patient_id=action.patient_id,
                         video_id=action.video_id, status="waiting", is_deleted=False, create_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"), update_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
     session.add(new_action)
     session.commit()
     action_id = new_action.id
     redis_client = get_redis_connection()
     redis_client.rpush("waiting_actions",
-                       f"{action.user_id}-{action_id}-{action.video_id}")
+                       f"{action.patient_id}-{action_id}-{action.video_id}")
     video.action_id = action_id
     video.update_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     session.add(video)
@@ -70,10 +70,10 @@ async def create_action(action: CreateAction = Body(...), session: SessionDep = 
     return {"message": "Action created successfully", "action_id": action_id}
 
 
-@router.get("/get_actions/{user_id}")
-async def get_actions(user_id: int, session: SessionDep = SessionDep):
+@router.get("/get_actions/{patient_id}")
+async def get_actions(patient_id: int, session: SessionDep = SessionDep):
     actions = session.query(Action).filter(
-        Action.user_id == user_id and Action.is_deleted == False).all()
+        Action.patient_id == patient_id and Action.is_deleted == False).all()
     return {"actions": [action.to_dict() for action in actions]}
 
 
@@ -105,8 +105,8 @@ async def delete_action(action_id: int, session: SessionDep = SessionDep):
             step_info.update_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             session.add(step_info)
     session.commit()
-    redis_conn.lrem("waiting_actions", 0, f"{action.user_id}-{action_id}-{action.video_id}")
-    redis_conn.lrem("running_actions", 0, f"{action.user_id}-{action_id}-{action.video_id}")
+    redis_conn.lrem("waiting_actions", 0, f"{action.patient_id}-{action_id}-{action.video_id}")
+    redis_conn.lrem("running_actions", 0, f"{action.patient_id}-{action_id}-{action.video_id}")
     return {"message": "Action deleted successfully"}
 
 
