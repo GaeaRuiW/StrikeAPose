@@ -85,7 +85,7 @@ async def inference_api(inference_request: InferenceRequest):
     def inference_thread():
         try:
             # flipped_video_path = flip_video(video_path)
-            result = inference(video_path, output_video_path, output_json_path)
+            result = inference(action_id, video_path, output_video_path, output_json_path)
             if result is not None:
                 data = {
                     "action_id": action_id,

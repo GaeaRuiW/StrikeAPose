@@ -90,6 +90,13 @@ while True:
                 "action": action_name
             }
         )
+        requests.post(
+            f"http://{backend_host}:8000/api/v1/actions/update_action_progress",
+            json={
+                "action_id": action_id, 
+                "progress": "running"
+            }
+        )
     else:
         redis_conn.rpush("error_actions", action_name)
         requests.post(
@@ -100,5 +107,11 @@ while True:
                 "action": action_name
             }
         )
-    
+        requests.post(
+            f"http://{backend_host}:8000/api/v1/actions/update_action_progress",
+            json={
+                "action_id": action_id, 
+                "progress": "error"
+            }
+        )
     time.sleep(scan_interval)

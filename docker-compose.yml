@@ -77,8 +77,8 @@ services:
     command: python app.py
   db:
     image: postgres:14
-    ports:
-      - "5432:5432"
+    # ports:
+    #   - "5432:5432"
     environment:
       - POSTGRES_PASSWORD=postgres
       - POSTGRES_DB=pose

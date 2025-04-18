@@ -7,6 +7,11 @@ import json
 import matplotlib.pyplot as plt
 from ultralytics import YOLO
 from check_point_v8 import get_featurepoints2, caculate_output
+from tqdm import tqdm
+import requests
+
+backend_host = os.getenv("BACKEND_HOST", "127.0.0.1")
+
 
 def get_perspective_matrix(frame, point_model, frame_count, orig_frame, fps=24.0):
     if frame_count < 2 * fps:
@@ -52,7 +57,7 @@ def get_perspective_matrix(frame, point_model, frame_count, orig_frame, fps=24.0
         return M, sorted_points
     return None, None
 
-def main(input_video_file, out_video_file, out_json_file, out_warped_video_file=None):
+def main(action_id, input_video_file, out_video_file, out_json_file, out_warped_video_file=None):
     current_dir = os.path.dirname(os.path.abspath(__file__))
     pose_model_path = os.path.join(current_dir, 'yolov8x-pose.pt')
     point_model_path = os.path.join(current_dir, 'yolov8s-point.pt')
@@ -65,6 +70,10 @@ def main(input_video_file, out_video_file, out_json_file, out_warped_video_file=
     if not cap.isOpened():
         print(f"Failed to open input video: {input_video_file}")
         return
+    
+    # 获取视频总帧数并初始化进度条
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    pbar_video = tqdm(total=total_frames, desc="Processing video frames")  # 新增进度条
 
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
     fps = 24.0
@@ -144,7 +153,17 @@ def main(input_video_file, out_video_file, out_json_file, out_warped_video_file=
         resized_orig_frame = cv2.resize(orig_frame, (1280, 720))
 
         video_writer.write(resized_orig_frame)
-
+        pbar_video.update(1)
+        # 每%10更新一次进度条
+        progress = frame_count / total_frames
+        if frame_count % (total_frames / 10) == 0:  # 每处理10%就更新一次
+            requests.post(
+                f"http://{backend_host}:8000/api/v1/actions/update_action_progress",
+                json={
+                    "action_id": action_id, 
+                    "progress": str(round(progress / 2, 2))
+                }
+            )
 
     if M is not None and data and out_warped_video_file:
         warped_frame = cv2.warpPerspective(last_orig_frame, M, (1280, 720))
@@ -220,6 +239,10 @@ def main(input_video_file, out_video_file, out_json_file, out_warped_video_file=
 
             # 打开输入视频
             cap = cv2.VideoCapture(input_video_path)
+
+            total_render_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+            pbar_render = tqdm(total=total_render_frames, desc="Rendering parameters")  # 新增进度条
+
             fps = cap.get(cv2.CAP_PROP_FPS)
             width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
             height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
@@ -344,7 +367,19 @@ def main(input_video_file, out_video_file, out_json_file, out_warped_video_file=
                             0.7, (0, 255, 0), 2)
                 '''
                 out.write(frame)
-
+                pbar_render.update(1)
+                # 每%10更新一次进度条
+                progress = frame_count / total_render_frames
+                if frame_count % (total_render_frames / 10) == 0:
+                    progress = str(round((0.5 + progress / 2), 2))
+                    requests.post(
+                        f"http://{backend_host}:8000/api/v1/actions/update_action_progress",
+                        json={
+                            "action_id": action_id, 
+                            "progress": progress
+                        }
+                    )
+            pbar_render.close()
             cap.release()
             out.release()
             print(f"参数渲染完成，输出视频：{output_video_path}")

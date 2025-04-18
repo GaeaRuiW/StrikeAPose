@@ -45,6 +45,10 @@ class UpdateActionStatus(BaseModel):
     status: str
     action: str
 
+class UpdateActionProgress(BaseModel):
+    action_id: int
+    progress: str
+
 
 router = APIRouter(tags=["actions"], prefix="/actions")
 redis_conn = get_redis_connection()
@@ -56,7 +60,7 @@ async def create_action(action: CreateAction = Body(...), session: SessionDep = 
     if not video:
         return {"message": "Video not found"}
     new_action = Action(patient_id=action.patient_id,
-                        video_id=action.video_id, status="waiting", is_deleted=False, create_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"), update_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+                        video_id=action.video_id, status="waiting", progress="waiting for processing", is_deleted=False, create_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"), update_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
     session.add(new_action)
     session.commit()
     action_id = new_action.id
@@ -151,3 +155,16 @@ async def update_action_status(action_status: UpdateActionStatus, session: Sessi
     action.update_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     session.commit()
     return {"message": "Action status updated successfully"}
+
+@router.post("/update_action_progress")
+async def update_action_progress(action_progress: UpdateActionProgress, session: SessionDep = SessionDep):
+    action_id = action_progress.action_id
+    progress = action_progress.progress
+    action = session.query(Action).filter(
+        Action.id == action_id, Action.is_deleted == False).first()
+    if not action:
+        return {"message": "Action not found"}
+    action.progress = progress
+    action.update_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    session.commit()
+    return {"message": "Action progress updated successfully"}
