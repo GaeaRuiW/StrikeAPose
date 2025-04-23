@@ -15,6 +15,9 @@ jobs:
         uses: shimataro/ssh-key-action@v2
         with:
           key: ${{ secrets.SSH_PRIVATE_KEY }}  # 配置服务器的 SSH 私钥
+          name: id_rsa                        # Name of the key file
+          known_hosts: ${{ secrets.SSH_KNOWN_HOSTS }}  # Add known_hosts
+          if_key_exists: fail
 
       - name: Deploy via SSH
         run: |
