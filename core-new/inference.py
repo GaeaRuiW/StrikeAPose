@@ -12,6 +12,21 @@ import requests
 
 backend_host = os.getenv("BACKEND_HOST", "127.0.0.1")
 
+def update_progress(action_id, current, total, phase=1):
+    """更新进度，phase=1表示视频处理阶段，phase=2表示渲染阶段"""
+    try:
+        # 第一阶段占50%，第二阶段占50%
+        progress = (phase-1)*0.5 + 0.5*(current/total)
+        requests.post(
+            f"http://{backend_host}:8000/api/v1/actions/update_action_progress",
+            json={
+                "action_id": action_id, 
+                "progress": str(round(progress, 2))
+            },
+            timeout=1  # 添加超时
+        )
+    except Exception as e:
+        print(f"更新进度失败: {str(e)}")
 
 def get_perspective_matrix(frame, point_model, frame_count, orig_frame, fps=24.0):
     if frame_count < 2 * fps:
@@ -155,15 +170,8 @@ def main(action_id, input_video_file, out_video_file, out_json_file, out_warped_
         video_writer.write(resized_orig_frame)
         pbar_video.update(1)
         # 每%10更新一次进度条
-        progress = frame_count / total_frames
-        if frame_count % (total_frames / 10) == 0:  # 每处理10%就更新一次
-            requests.post(
-                f"http://{backend_host}:8000/api/v1/actions/update_action_progress",
-                json={
-                    "action_id": action_id, 
-                    "progress": str(round(progress / 2, 2))
-                }
-            )
+        if frame_count % 10 == 0:  # 每10帧更新一次，更频繁
+            update_progress(action_id, frame_count, total_frames, phase=1)
 
     if M is not None and data and out_warped_video_file:
         warped_frame = cv2.warpPerspective(last_orig_frame, M, (1280, 720))
@@ -369,16 +377,8 @@ def main(action_id, input_video_file, out_video_file, out_json_file, out_warped_
                 out.write(frame)
                 pbar_render.update(1)
                 # 每%10更新一次进度条
-                progress = frame_count / total_render_frames
-                if frame_count % (total_render_frames / 10) == 0:
-                    progress = str(round((0.5 + progress / 2), 2))
-                    requests.post(
-                        f"http://{backend_host}:8000/api/v1/actions/update_action_progress",
-                        json={
-                            "action_id": action_id, 
-                            "progress": progress
-                        }
-                    )
+                if frame_count % 10 == 0:  # 每10帧更新一次
+                    update_progress(action_id, frame_count, total_render_frames, phase=2)
             pbar_render.close()
             cap.release()
             out.release()
