@@ -22,7 +22,7 @@ jobs:
       - name: Deploy via SSH
         run: |
           ssh -i ${{ secrets.SSH_PRIVATE_KEY }} \
-              tug@sj1.cfx.icu -p 2200 \
+              tug@213.35.119.238 -p 2200 \
               "cd ~/StrikeAPose && git pull origin main && \
                docker compose down && \
                docker compose up -d --build && \
