@@ -21,7 +21,7 @@ def update_progress(action_id, current, total, phase=1):
             f"http://{backend_host}:8000/api/v1/actions/update_action_progress",
             json={
                 "action_id": action_id, 
-                "progress": str(round(progress, 2))
+                "progress": f"{round(progress * 100)}%"
             },
             timeout=1  # 添加超时
         )
