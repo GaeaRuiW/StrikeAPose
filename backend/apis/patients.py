@@ -54,17 +54,17 @@ def update_patient_by_id(patient: UpdatePatientModel = Body(..., embed=True), se
     if not doctor:
         return {"message": "Doctor not found"}
     if doctor.role_id != 1:
-        patient = session.query(Patients).filter(Patients.id == patient.patient_id,
+        patient_ = session.query(Patients).filter(Patients.id == patient.patient_id,
                                                  Patients.doctor_id == patient.doctor_id, Patients.is_deleted == False).first()
-        if not patient:
+        if not patient_:
             return {"message": "Patient not found or this doctor does not have permission to update this patient"}
-    patient.age = patient.age
-    patient.gender = patient.gender
-    patient.case_id = patient.case_id
-    patient.doctor_id = patient.doctor_id
-    patient.update_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    patient_.age = patient.age
+    patient_.gender = patient.gender
+    patient_.case_id = patient.case_id
+    patient_.doctor_id = patient.doctor_id
+    patient_.update_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     session.commit()
-    return patient.to_dict()
+    return patient_.to_dict()
 
 
 @router.delete("/delete_patient_by_id/{patient_id}/{doctor_id}")
@@ -74,18 +74,18 @@ def delete_patient_by_id(patient_id: int, doctor_id: int, session: SessionDep = 
     if not doctor:
         return {"message": "Doctor not found"}
     if doctor.role_id != 1:
-        patient = session.query(Patients).filter(
+        patient_ = session.query(Patients).filter(
             Patients.id == patient_id, Patients.doctor_id == doctor_id, Patients.is_deleted == False).first()
-        if not patient:
+        if not patient_:
             return {"message": "Patient not found or this doctor does not have permission to delete this patient"}
 
     else:
-        patient = session.query(Patients).filter(
+        patient_ = session.query(Patients).filter(
             Patients.id == patient_id, Patients.is_deleted == False).first()
-        if not patient:
+        if not patient_:
             return {"message": "Patient not found"}
-    patient.is_deleted = True
-    patient.update_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    patient_.is_deleted = True
+    patient_.update_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     session.commit()
     return {"message": "Patient deleted successfully"}
 

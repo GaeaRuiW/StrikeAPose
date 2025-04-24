@@ -16,6 +16,7 @@ backend_host = os.getenv("BACKEND_HOST", "127.0.0.1")
 update_action_url = f"http://{backend_host}:8000/api/v1/actions/update_action"
 update_action_status_url = f"http://{backend_host}:8000/api/v1/actions/update_action_status"
 insert_inference_video_url = f"http://{backend_host}:8000/api/v1/videos/insert_inference_video"
+update_progewss_url = f"http://{backend_host}:8000/api/v1/actions/update_progress"
 
 def flip_video(video_path):
     print("flipping video")
@@ -95,12 +96,15 @@ async def inference_api(inference_request: InferenceRequest):
                 requests.put(update_action_url, json=data)
                 requests.post(f"{insert_inference_video_url}/{action_id}")
                 requests.post(update_action_status_url, json={"action_id": action_id, "status": "success", "action": action})
+                requests.post(update_progewss_url, json={"action_id": action_id, "progress": "分析完成"})
             else:
                 print('No result! please check the csv and log file.')
                 requests.post(update_action_status_url, json={"action_id": action_id, "status": "failed: no result", "action": action})
+                requests.post(update_progewss_url, json={"action_id": action_id, "progress": "分析失败"})
         except Exception as e:
             print(e)
             requests.post(update_action_status_url, json={"action_id": action_id, "status": f"failed: {str(e)}", "action": action})
+            requests.post(update_progewss_url, json={"action_id": action_id, "progress": "分析失败"})
 
     thread = Thread(target=inference_thread)
     thread.start()

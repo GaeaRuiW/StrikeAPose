@@ -5,12 +5,12 @@ from common.utils import get_redis_connection
 from fastapi import APIRouter, Body
 from models import Action, SessionDep, Stage, StepsInfo, VideoPath
 from pydantic import BaseModel
-from common.utils import get_redis_connection
 
 
 class CreateAction(BaseModel):
     patient_id: int
     video_id: int
+    parent_id: Optional[int] = None
 
 
 class StepsInfoData(BaseModel):
@@ -40,10 +40,12 @@ class UpdateAction(BaseModel):
     action_id: int
     data: Optional[List[UpdateActionData]]
 
+
 class UpdateActionStatus(BaseModel):
     action_id: int
     status: str
     action: str
+
 
 class UpdateActionProgress(BaseModel):
     action_id: int
@@ -53,6 +55,7 @@ class UpdateActionProgress(BaseModel):
 router = APIRouter(tags=["actions"], prefix="/actions")
 redis_conn = get_redis_connection()
 
+
 @router.post("/")
 async def create_action(action: CreateAction = Body(...), session: SessionDep = SessionDep):
     video = session.query(VideoPath).filter(VideoPath.id == action.video_id,
@@ -60,10 +63,17 @@ async def create_action(action: CreateAction = Body(...), session: SessionDep = 
     if not video:
         return {"message": "Video not found"}
     new_action = Action(patient_id=action.patient_id,
-                        video_id=action.video_id, status="waiting", progress="waiting for processing", is_deleted=False, create_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"), update_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+                        video_id=action.video_id, status="waiting", progress="waiting for processing", is_deleted=False, create_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"), update_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                        parent_id=action.parent_id if action.parent_id else None)
     session.add(new_action)
     session.commit()
     action_id = new_action.id
+    action_ = session.query(Action).filter(
+        Action.id == action_id, Action.is_deleted == False).first()
+    if not action_:
+        return {"message": "Action not found"}
+    action_.parent_id = action.parent_id if action.parent_id else action_id
+    session.commit()
     redis_client = get_redis_connection()
     redis_client.rpush("waiting_actions",
                        f"{action.patient_id}-{action_id}-{action.video_id}")
@@ -79,6 +89,24 @@ async def get_actions(patient_id: int, session: SessionDep = SessionDep):
     actions = session.query(Action).filter(
         Action.patient_id == patient_id and Action.is_deleted == False).all()
     return {"actions": [action.to_dict() for action in actions]}
+
+
+@router.get("/get_action_by_id/{action_id}")
+async def get_action_by_id(action_id: int, session: SessionDep = SessionDep):
+    action = session.query(Action).filter(
+        Action.id == action_id, Action.is_deleted == False).first()
+    if not action:
+        return {"message": "Action not found"}
+    return {"action": action.to_dict()}
+
+
+@router.get("/get_action_by_parent_id/{parent_id}")
+async def get_action_by_parent_id(parent_id: int, session: SessionDep = SessionDep):
+    action = session.query(Action).filter(
+        Action.parent_id == parent_id, Action.is_deleted == False).all()
+    if not action:
+        return {"message": "Action not found"}
+    return {"action": [a.to_dict() for a in action]}
 
 
 @router.delete("/delete_action/{action_id}")
@@ -109,8 +137,10 @@ async def delete_action(action_id: int, session: SessionDep = SessionDep):
             step_info.update_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             session.add(step_info)
     session.commit()
-    redis_conn.lrem("waiting_actions", 0, f"{action.patient_id}-{action_id}-{action.video_id}")
-    redis_conn.lrem("running_actions", 0, f"{action.patient_id}-{action_id}-{action.video_id}")
+    redis_conn.lrem("waiting_actions", 0,
+                    f"{action.patient_id}-{action_id}-{action.video_id}")
+    redis_conn.lrem("running_actions", 0,
+                    f"{action.patient_id}-{action_id}-{action.video_id}")
     return {"message": "Action deleted successfully"}
 
 
@@ -155,6 +185,7 @@ async def update_action_status(action_status: UpdateActionStatus, session: Sessi
     action.update_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     session.commit()
     return {"message": "Action status updated successfully"}
+
 
 @router.post("/update_action_progress")
 async def update_action_progress(action_progress: UpdateActionProgress, session: SessionDep = SessionDep):
