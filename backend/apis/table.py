@@ -42,11 +42,15 @@ def get_average_step_hip_degree(action_id: int, session: Session = SessionDep):
     # Calculate overall stats using combined data
     all_degrees = step_hip_degree_low + step_hip_degree_high
     average, standard_deviation = calculate_stats(all_degrees)
+    min_value = min(all_degrees) if all_degrees else 0
+    max_value = max(all_degrees) if all_degrees else 0
 
     return {
         "low_average": low_average,
         "high_average": high_average,
         "average": average,
+        "min_value": min_value,
+        "max_value": max_value,
         "low_standard_deviation": low_standard_deviation,
         "high_standard_deviation": high_standard_deviation,
         "standard_deviation": standard_deviation,  # Corrected: uses combined data
