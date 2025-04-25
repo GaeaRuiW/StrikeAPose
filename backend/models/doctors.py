@@ -8,7 +8,7 @@ class Doctors(SQLModel, table=True):
     username: str = Field(index=True)
     password: str
     email: str
-    phone: int
+    phone: str
     role_id: int = Field(default=1)
     create_time: str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     update_time: str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
