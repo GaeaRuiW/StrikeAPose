@@ -103,6 +103,35 @@ def get_average_step_length(action_id: int, session: SessionDep = SessionDep):
         "chart_url": f"/dashboard/step_length/{action_id}"
     }
 
+@router.get("/step_windth/{action_id}")
+def get_average_step_width(action_id: int, session: SessionDep = SessionDep):
+    step_width = []
+
+    stages_ids_query = session.query(Stage.id).filter(
+        Stage.action_id == action_id, Stage.is_deleted == False
+    )
+    stage_ids = [id_tuple[0] for id_tuple in stages_ids_query.all()]
+
+    if not stage_ids:
+        return {"average": 0, "standard_deviation": 0,
+                "chart_url": f"/dashboard/step_width/{action_id}"}
+
+    steps_info_query = session.query(StepsInfo).filter(
+        StepsInfo.stage_id.in_(stage_ids),
+        StepsInfo.is_deleted == False
+    )
+
+    for step_info in steps_info_query.all():
+        if step_info.step_width is not None:
+            step_width.append(step_info.step_width)
+
+    average, standard_deviation = calculate_stats(step_width)
+    
+    return {
+        "average": average,
+        "standard_deviation": standard_deviation,
+        "chart_url": f"/dashboard/step_width/{action_id}"
+    }
 
 @router.get("/step_speed/{action_id}")
 def get_average_step_speed(action_id: int, session: SessionDep = SessionDep):

@@ -52,11 +52,13 @@ async def delete_video(video: DeleteVideo = Body(...), session: SessionDep = Ses
     all_actions = session.query(Action).filter(
         Action.id == action_id, Action.is_deleted == False).all()
     if not all_actions:
+        session.commit()
         return {"message": "Video deleted successfully"}
     for action_ in all_actions:
         all_stages = session.query(Stage).filter(
         Stage.action_id == action_id, Stage.is_deleted == False).all()
         if not all_stages:
+            session.commit()
             return {"message": "Video deleted successfully"}
         for stage_ in all_stages:
             steps = session.query(StepsInfo).filter(
@@ -74,6 +76,7 @@ async def delete_video(video: DeleteVideo = Body(...), session: SessionDep = Ses
         all_stages = session.query(Stage).filter(
         Stage.action_id == action_id, Stage.is_deleted == False).all()
         if not all_stages:
+            session.commit()
             return {"message": "Video deleted successfully"}
         for stage_ in all_stages:
             steps = session.query(StepsInfo).filter(
@@ -168,6 +171,8 @@ async def get_videos(patient_id: int, session: SessionDep = SessionDep):
 async def get_video_by_original(original_video_id: int, session: SessionDep = SessionDep):
     video = session.query(VideoPath).filter(
         VideoPath.id == original_video_id and VideoPath.is_deleted == False).first()
+    if not video:
+        return {"message": "Video not found"}
     video_path = video.video_path
     video_path = video_path.replace("original", "inference")
     reference_video = session.query(VideoPath).filter(
