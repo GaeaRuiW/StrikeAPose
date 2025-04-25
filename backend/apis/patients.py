@@ -58,6 +58,10 @@ def update_patient_by_id(patient: UpdatePatientModel = Body(..., embed=True), se
                                                  Patients.doctor_id == patient.doctor_id, Patients.is_deleted == False).first()
         if not patient_:
             return {"message": "Patient not found or this doctor does not have permission to update this patient"}
+    else:
+        patient_ = session.query(Patients).filter(Patients.id == patient.patient_id, Patients.is_deleted == False).first()
+        if not patient_:
+            return {"message": "Patient not found or this doctor does not have permission to update this patient"}
     patient_.age = patient.age
     patient_.gender = patient.gender
     patient_.case_id = patient.case_id
