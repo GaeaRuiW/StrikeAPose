@@ -3,6 +3,7 @@ from apis.dashboard import router as dashboard_router
 from apis.doctors import router as doctor_router
 from apis.patients import router as patient_router
 from apis.videos import router as video_router
+from apis.table import router as table_router
 from config import listen_port, video_dir
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -19,6 +20,7 @@ app.include_router(dashboard_router, prefix="/api/v1", tags=["dashboard"])
 app.include_router(doctor_router, prefix="/api/v1", tags=["doctors"])
 app.include_router(patient_router, prefix="/api/v1", tags=["patients"])
 app.include_router(video_router, prefix="/api/v1", tags=["videos"])
+app.include_router(table_router, prefix="/api/v1", tags=["tables"])
 
 origins = ["*"]
 app.add_middleware(

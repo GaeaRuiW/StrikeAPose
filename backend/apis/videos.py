@@ -3,12 +3,89 @@ import uuid
 from datetime import datetime
 
 from config import video_dir
-from fastapi import APIRouter, File, Request, UploadFile
+from fastapi import APIRouter, File, Request, UploadFile, Body
 from fastapi.responses import StreamingResponse
-from models import SessionDep, Patients, VideoPath
+from models import SessionDep, Patients, VideoPath, Doctors, Action, Stage, StepsInfo
+from pydantic import BaseModel
 
 router = APIRouter(tags=["videos"], prefix="/videos")
 
+
+class DeleteVideo(BaseModel):
+    video_id: int
+    doctor_id: int
+
+
+@router.delete("/delete_video")
+async def delete_video(video: DeleteVideo = Body(...), session: SessionDep = SessionDep):
+    doctor = session.query(Doctors).filter(
+        Doctors.id == video.doctor_id and Doctors.is_deleted == False).first()
+    if not doctor:
+        return {"message": "Doctor not found"}
+    if doctor.role_id != 1:
+        video_ = session.query(VideoPath).filter(VideoPath.id == video.video_id,
+                                                 VideoPath.is_deleted == False).first()
+        if not video_:
+            return {"message": "Video not found or this doctor does not have permission to delete this video"}
+    else:
+        video_ = session.query(VideoPath).filter(VideoPath.id == video.video_id, VideoPath.is_deleted == False, VideoPath.patient_id == video.patient_id).first()
+    if not video_:
+        return {"message": "Video not found"}
+    action_id = video_.action_id
+    if not action_id:
+        session.delete(video_)
+        session.commit()
+        return {"message": "Video deleted successfully"}
+    all_videos = session.query(VideoPath).filter(
+        VideoPath.action_id == action_id, VideoPath.is_deleted == False).all()
+    for video_ in all_videos:
+        video_path = video_.video_path
+        if os.path.exists(video_path):
+            print(f"Deleting video: {video_path}")
+            os.remove(video_path)
+        if os.path.exists(video_path.replace("mp4", "json")):
+            print(f"Deleting json: {video_path.replace('mp4', 'json')}")
+            os.remove(video_path.replace("mp4", "json"))
+        session.delete(video_)
+
+    all_actions = session.query(Action).filter(
+        Action.id == action_id, Action.is_deleted == False).all()
+    if not all_actions:
+        return {"message": "Video deleted successfully"}
+    for action_ in all_actions:
+        all_stages = session.query(Stage).filter(
+        Stage.action_id == action_id, Stage.is_deleted == False).all()
+        if not all_stages:
+            return {"message": "Video deleted successfully"}
+        for stage_ in all_stages:
+            steps = session.query(StepsInfo).filter(
+                StepsInfo.stage_id == stage_.id, StepsInfo.is_deleted == False).all()
+            if not steps:
+                pass
+            for step in steps:
+                session.delete(step)
+            session.delete(stage_)
+        session.delete(action_)
+    
+    all_parent_actions = session.query(Action).filter(
+        Action.parent_id == action_id, Action.is_deleted == False).all()
+    for action_ in all_parent_actions:
+        all_stages = session.query(Stage).filter(
+        Stage.action_id == action_id, Stage.is_deleted == False).all()
+        if not all_stages:
+            return {"message": "Video deleted successfully"}
+        for stage_ in all_stages:
+            steps = session.query(StepsInfo).filter(
+                StepsInfo.stage_id == stage_.id, StepsInfo.is_deleted == False).all()
+            if not steps:
+                pass
+            for step in steps:
+                session.delete(step)
+            session.delete(stage_)
+        session.delete(action_)
+    session.commit()
+
+    return {"message": "Video deleted successfully"}
 
 @router.post("/upload/{patient_id}")
 async def upload_video(patient_id: int, video: UploadFile = File(...), session: SessionDep = SessionDep):
