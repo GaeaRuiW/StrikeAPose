@@ -5,7 +5,7 @@ from sqlmodel import Field, SQLModel
 
 class Action(SQLModel, table=True):
     id: int = Field(primary_key=True)
-    parent_id: int = Field(default=None, foreign_key="action.id")
+    parent_id: int = Field(default=None, foreign_key="action.id", nullable=True)
     video_id: int
     patient_id: int
     status: str
