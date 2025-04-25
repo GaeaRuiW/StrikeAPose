@@ -6,7 +6,7 @@ router = APIRouter(tags=["table"], prefix="/table")
 
 
 @router.get("/step_hip_degree/{action_id}")
-def get_average_step_hip_degree(action_id: int, session: Session = SessionDep):
+def get_average_step_hip_degree(action_id: int, session: SessionDep = SessionDep):
     step_hip_degree_low = []
     step_hip_degree_high = []
 
@@ -59,7 +59,7 @@ def get_average_step_hip_degree(action_id: int, session: Session = SessionDep):
 
 
 @router.get("/step_length/{action_id}")
-def get_average_step_length(action_id: int, session: Session = SessionDep):
+def get_average_step_length(action_id: int, session: SessionDep = SessionDep):
     left_step_length = []
     right_step_length = []
 
@@ -105,7 +105,7 @@ def get_average_step_length(action_id: int, session: Session = SessionDep):
 
 
 @router.get("/step_speed/{action_id}")
-def get_average_step_speed(action_id: int, session: Session = SessionDep):
+def get_average_step_speed(action_id: int, session: SessionDep = SessionDep):
     left_step_speed = []
     right_step_speed = []
 
@@ -149,7 +149,7 @@ def get_average_step_speed(action_id: int, session: Session = SessionDep):
 
 
 @router.get("/step_stride/{action_id}")
-def get_average_step_stride(action_id: int, session: Session = SessionDep):
+def get_average_step_stride(action_id: int, session: SessionDep = SessionDep):
     step_stride = []
 
     stages_ids_query = session.query(Stage.id).filter(
@@ -181,7 +181,7 @@ def get_average_step_stride(action_id: int, session: Session = SessionDep):
 
 
 @router.get("/step_difference/{action_id}")
-def get_average_step_difference(action_id: int, session: Session = SessionDep):
+def get_average_step_difference(action_id: int, session: SessionDep = SessionDep):
     step_difference = []
 
     stages_ids_query = session.query(Stage.id).filter(
@@ -213,7 +213,7 @@ def get_average_step_difference(action_id: int, session: Session = SessionDep):
 
 
 @router.get("/support_time/{action_id}")
-def get_average_support_time(action_id: int, session: Session = SessionDep):
+def get_average_support_time(action_id: int, session: SessionDep = SessionDep):
     left_support_time = []
     right_support_time = []
 
@@ -258,7 +258,7 @@ def get_average_support_time(action_id: int, session: Session = SessionDep):
 
 
 @router.get("/liftoff_height/{action_id}")
-def get_average_liftoff_height(action_id: int, session: Session = SessionDep):
+def get_average_liftoff_height(action_id: int, session: SessionDep = SessionDep):
     left_liftoff_height = []
     right_liftoff_height = []
 
