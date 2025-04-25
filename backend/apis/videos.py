@@ -51,28 +51,13 @@ async def delete_video(video: DeleteVideo = Body(...), session: SessionDep = Ses
 
     all_actions = session.query(Action).filter(
         Action.id == action_id, Action.is_deleted == False).all()
+    all_parent_actions = session.query(Action).filter(
+        Action.parent_id == action_id, Action.is_deleted == False).all()
+    all_actions.extend(all_parent_actions)
     if not all_actions:
         session.commit()
         return {"message": "Video deleted successfully"}
     for action_ in all_actions:
-        all_stages = session.query(Stage).filter(
-        Stage.action_id == action_id, Stage.is_deleted == False).all()
-        if not all_stages:
-            session.commit()
-            return {"message": "Video deleted successfully"}
-        for stage_ in all_stages:
-            steps = session.query(StepsInfo).filter(
-                StepsInfo.stage_id == stage_.id, StepsInfo.is_deleted == False).all()
-            if not steps:
-                pass
-            for step in steps:
-                session.delete(step)
-            session.delete(stage_)
-        session.delete(action_)
-    
-    all_parent_actions = session.query(Action).filter(
-        Action.parent_id == action_id, Action.is_deleted == False).all()
-    for action_ in all_parent_actions:
         all_stages = session.query(Stage).filter(
         Stage.action_id == action_id, Stage.is_deleted == False).all()
         if not all_stages:
