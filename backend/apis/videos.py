@@ -14,6 +14,7 @@ router = APIRouter(tags=["videos"], prefix="/videos")
 class DeleteVideo(BaseModel):
     video_id: int
     doctor_id: int
+    patient_id: int
 
 
 @router.delete("/delete_video")
