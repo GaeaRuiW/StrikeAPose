@@ -150,7 +150,7 @@ def get_average_step_length(action_id: int, session: SessionDep = SessionDep):
         "chart_url": f"/dashboard/step_length/{action_id}"
     }
 
-@router.get("/step_windth/{action_id}")
+@router.get("/step_width/{action_id}")
 def get_average_step_width(action_id: int, session: SessionDep = SessionDep):
     step_width = []
 
