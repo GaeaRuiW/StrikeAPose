@@ -96,15 +96,15 @@ async def inference_api(inference_request: InferenceRequest):
                 requests.put(update_action_url, json=data)
                 requests.post(f"{insert_inference_video_url}/{action_id}")
                 requests.post(update_action_status_url, json={"action_id": action_id, "status": "success", "action": action})
-                requests.post(update_progewss_url, json={"action_id": action_id, "progress": "分析完成"})
+                requests.post(update_progewss_url, json={"action_id": action_id, "progress": ""})
             else:
                 print('No result! please check the csv and log file.')
                 requests.post(update_action_status_url, json={"action_id": action_id, "status": "failed: no result", "action": action})
-                requests.post(update_progewss_url, json={"action_id": action_id, "progress": "分析失败"})
+                requests.post(update_progewss_url, json={"action_id": action_id, "progress": ""})
         except Exception as e:
             print(e)
             requests.post(update_action_status_url, json={"action_id": action_id, "status": f"failed: {str(e)}", "action": action})
-            requests.post(update_progewss_url, json={"action_id": action_id, "progress": "分析失败"})
+            requests.post(update_progewss_url, json={"action_id": action_id, "progress": ""})
 
     thread = Thread(target=inference_thread)
     thread.start()
