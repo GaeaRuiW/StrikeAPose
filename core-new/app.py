@@ -16,7 +16,7 @@ backend_host = os.getenv("BACKEND_HOST", "127.0.0.1")
 update_action_url = f"http://{backend_host}:8000/api/v1/actions/update_action"
 update_action_status_url = f"http://{backend_host}:8000/api/v1/actions/update_action_status"
 insert_inference_video_url = f"http://{backend_host}:8000/api/v1/videos/insert_inference_video"
-update_progewss_url = f"http://{backend_host}:8000/api/v1/actions/update_progress"
+update_progewss_url = f"http://{backend_host}:8000/api/v1/actions/update_action_progress"
 
 def flip_video(video_path):
     print("flipping video")
