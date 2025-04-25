@@ -22,6 +22,7 @@ class UpdatePatientModel(BaseModel):
     case_id: str
     doctor_id: int
     patient_id: int
+    username: str
 
 
 @router.put("/insert_patient")
@@ -66,6 +67,7 @@ def update_patient_by_id(patient: UpdatePatientModel = Body(..., embed=True), se
     patient_.gender = patient.gender
     patient_.case_id = patient.case_id
     patient_.doctor_id = patient.doctor_id
+    patient_.username = patient.username
     patient_.update_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     session.commit()
     return patient_.to_dict()

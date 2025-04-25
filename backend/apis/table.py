@@ -7,6 +7,10 @@ router = APIRouter(tags=["table"], prefix="/table")
 
 @router.get("/step_hip_degree/{action_id}")
 def get_average_step_hip_degree(action_id: int, session: SessionDep = SessionDep):
+    left_step_hip_degree_low = []
+    left_step_hip_degree_high = []
+    right_step_hip_degree_high = []
+    right_step_hip_degree_low = []
     step_hip_degree_low = []
     step_hip_degree_high = []
 
@@ -31,26 +35,69 @@ def get_average_step_hip_degree(action_id: int, session: SessionDep = SessionDep
     for step_info in steps_info_query.all():
         # Check for None before appending
         if step_info.hip_min_degree is not None:
+            # step_hip_degree_low.append(step_info.hip_min_degree)
+            if step_info.front_leg == "left":
+                left_step_hip_degree_low.append(step_info.hip_min_degree)
+            elif step_info.front_leg == "right":
+                right_step_hip_degree_low.append(step_info.hip_min_degree)
             step_hip_degree_low.append(step_info.hip_min_degree)
         if step_info.hip_max_degree is not None:
+            # step_hip_degree_high.append(step_info.hip_max_degree)
+            if step_info.front_leg == "left":
+                left_step_hip_degree_high.append(step_info.hip_max_degree)
+            elif step_info.front_leg == "right":
+                right_step_hip_degree_high.append(step_info.hip_max_degree)
             step_hip_degree_high.append(step_info.hip_max_degree)
 
     low_average, low_standard_deviation = calculate_stats(step_hip_degree_low)
     high_average, high_standard_deviation = calculate_stats(
         step_hip_degree_high)
+    left_low_average, left_low_standard_deviation = calculate_stats(
+        left_step_hip_degree_low)
+    left_high_average, left_high_standard_deviation = calculate_stats(
+        left_step_hip_degree_high)
+    right_low_average, right_low_standard_deviation = calculate_stats(
+        right_step_hip_degree_low)
+    right_high_average, right_high_standard_deviation = calculate_stats(
+        right_step_hip_degree_high)
 
     # Calculate overall stats using combined data
     all_degrees = step_hip_degree_low + step_hip_degree_high
     average, standard_deviation = calculate_stats(all_degrees)
+    all_left_degrees = left_step_hip_degree_low + left_step_hip_degree_high
+    all_right_degrees = right_step_hip_degree_low + right_step_hip_degree_high
+    left_average, left_standard_deviation = calculate_stats(all_left_degrees)
+    right_average, right_standard_deviation = calculate_stats(
+        all_right_degrees)
     min_value = min(all_degrees) if all_degrees else 0
     max_value = max(all_degrees) if all_degrees else 0
+    left_min_value = min(all_left_degrees) if all_left_degrees else 0
+    left_max_value = max(all_left_degrees) if all_left_degrees else 0
+    right_min_value = min(all_right_degrees) if all_right_degrees else 0
+    right_max_value = max(all_right_degrees) if all_right_degrees else 0
 
     return {
         "low_average": low_average,
         "high_average": high_average,
+        "left_low_average": left_low_average,
+        "left_high_average": left_high_average,
+        "right_low_average": right_low_average,
+        "right_high_average": right_high_average,
+        "left_average": left_average,
+        "right_average": right_average,
         "average": average,
         "min_value": min_value,
         "max_value": max_value,
+        "left_min_value": left_min_value,
+        "left_max_value": left_max_value,
+        "right_min_value": right_min_value,
+        "right_max_value": right_max_value,
+        "left_standard_deviation": left_standard_deviation,
+        "right_standard_deviation": right_standard_deviation,
+        "left_low_standard_deviation": left_low_standard_deviation,
+        "left_high_standard_deviation": left_high_standard_deviation,
+        "right_low_standard_deviation": right_low_standard_deviation,
+        "right_high_standard_deviation": right_high_standard_deviation,
         "low_standard_deviation": low_standard_deviation,
         "high_standard_deviation": high_standard_deviation,
         "standard_deviation": standard_deviation,  # Corrected: uses combined data
