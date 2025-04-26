@@ -87,7 +87,7 @@ async def create_action(action: CreateAction = Body(...), session: SessionDep = 
 @router.get("/get_actions/{patient_id}")
 async def get_actions(patient_id: int, session: SessionDep = SessionDep):
     actions = session.query(Action).filter(
-        Action.patient_id == patient_id and Action.is_deleted == False).all()
+        Action.patient_id == patient_id, Action.is_deleted == False).all()
     return {"actions": [action.to_dict() for action in actions]}
 
 
