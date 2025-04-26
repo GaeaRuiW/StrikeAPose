@@ -47,14 +47,14 @@ def get_all_doctors(session: SessionDep = SessionDep):
 @router.get("/get_doctor_by_id/{doctor_id}")
 def get_doctor_by_id(doctor_id: int, session: SessionDep = SessionDep):
     doctor = session.query(Doctors).filter(
-        Doctors.id == doctor_id and Doctors.is_deleted == False).first()
+        Doctors.id == doctor_id, Doctors.is_deleted == False).first()
     return doctor.to_dict() if doctor else {"message": "Doctor not found"}
 
 
 @router.put("/update_doctor_by_id")
 def update_doctor_by_id(doctor: UpdateDoctorModel = Body(..., embed=True), session: SessionDep = SessionDep):
     doctor_db = session.query(Doctors).filter(
-        Doctors.id == doctor.doctor_id and Doctors.is_deleted == False).first()
+        Doctors.id == doctor.doctor_id, Doctors.is_deleted == False).first()
     if not doctor_db:
         return {"message": "Doctor not found"}
     doctor_db.email = doctor.email
@@ -68,7 +68,7 @@ def update_doctor_by_id(doctor: UpdateDoctorModel = Body(..., embed=True), sessi
 @router.delete("/delete_doctor_by_id/{doctor_id}")
 def delete_doctor_by_id(doctor_id: int, doctor_model: DeleteDoctorModel, session: SessionDep = SessionDep):
     doctor = session.query(Doctors).filter(
-        Doctors.id == doctor_id and Doctors.is_deleted == False).first()
+        Doctors.id == doctor_id, Doctors.is_deleted == False).first()
     if not doctor:
         return {"message": "Doctor not found"}
     if not check_password(doctor_model.password, doctor.password):
@@ -82,7 +82,7 @@ def delete_doctor_by_id(doctor_id: int, doctor_model: DeleteDoctorModel, session
 @router.get("/get_doctor_by_name/{name}")
 def get_doctor_by_name(name: str, session: SessionDep = SessionDep):
     doctor = session.query(Doctors).filter(
-        Doctors.username == name and Doctors.is_deleted == False).first()
+        Doctors.username == name, Doctors.is_deleted == False).first()
     return doctor.to_dict() if doctor else {"message": "Doctor not found"}
 
 
@@ -90,7 +90,7 @@ def get_doctor_by_name(name: str, session: SessionDep = SessionDep):
 def login_doctor(doctor_model: LoginModel = Body(..., embed=True), session: SessionDep = SessionDep):
     if (
         doctor := session.query(Doctors)
-        .filter(Doctors.username == doctor_model.username and Doctors.is_deleted == False)
+        .filter(Doctors.username == doctor_model.username, Doctors.is_deleted == False)
         .first()
     ):
         return (

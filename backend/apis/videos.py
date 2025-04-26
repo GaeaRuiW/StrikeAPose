@@ -20,7 +20,7 @@ class DeleteVideo(BaseModel):
 @router.delete("/delete_video")
 async def delete_video(video: DeleteVideo = Body(...), session: SessionDep = SessionDep):
     doctor = session.query(Doctors).filter(
-        Doctors.id == video.doctor_id and Doctors.is_deleted == False).first()
+        Doctors.id == video.doctor_id, Doctors.is_deleted == False).first()
     if not doctor:
         return {"message": "Doctor not found"}
     if doctor.role_id != 1:
@@ -79,7 +79,7 @@ async def delete_video(video: DeleteVideo = Body(...), session: SessionDep = Ses
 @router.post("/upload/{patient_id}")
 async def upload_video(patient_id: int, video: UploadFile = File(...), session: SessionDep = SessionDep):
     patient = session.query(Patients).filter(
-        Patients.id == patient_id and Patients.is_deleted == False).first()
+        Patients.id == patient_id, Patients.is_deleted == False).first()
     if not patient:
         return {"message": "Patient not found"}
     if not video.content_type.startswith("video/"):
@@ -149,13 +149,13 @@ async def stream_video(video_type: str, patient_id: int, video_id: int, session:
 @router.get("/get_videos/{patient_id}")
 async def get_videos(patient_id: int, session: SessionDep = SessionDep):
     videos = session.query(VideoPath).filter(
-        VideoPath.patient_id == patient_id and VideoPath.is_deleted == False).all()
+        VideoPath.patient_id == patient_id, VideoPath.is_deleted == False).all()
     return {"videos": [video.to_dict() for video in videos]}
 
 @router.get("/get_inference_video_by_original_id/{original_video_id}")
 async def get_video_by_original(original_video_id: int, session: SessionDep = SessionDep):
     video = session.query(VideoPath).filter(
-        VideoPath.id == original_video_id and VideoPath.is_deleted == False).first()
+        VideoPath.id == original_video_id, VideoPath.is_deleted == False).first()
     if not video:
         return {"message": "Video not found"}
     video_path = video.video_path
@@ -170,14 +170,14 @@ async def get_video_by_original(original_video_id: int, session: SessionDep = Se
 @router.get("/get_video_by_id/{video_id}")
 async def get_video_by_id(video_id: int, session: SessionDep = SessionDep):
     video = session.query(VideoPath).filter(
-        VideoPath.id == video_id and VideoPath.is_deleted == False).first()
+        VideoPath.id == video_id, VideoPath.is_deleted == False).first()
     return video.to_dict() if video else {"message": "Video not found"}
 
 
 @router.post("/insert_inference_video/{action_id}")
 async def insert_inference_video(action_id: int, session: SessionDep = SessionDep):
     video = session.query(VideoPath).filter(
-        VideoPath.action_id == action_id and VideoPath.is_deleted == False).first()
+        VideoPath.action_id == action_id, VideoPath.is_deleted == False).first()
     if not video:
         return {"message": "Video not found"}
     new_video_path = video.video_path.replace("original", "inference")
