@@ -117,25 +117,25 @@ async def delete_action(action_id: int, session: SessionDep = SessionDep):
         return {"message": "Action not found"}
     action.is_deleted = True
     action.update_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    session.add(action)
+    # session.add(action)
     videos = session.query(VideoPath).filter(
         VideoPath.action_id == action_id, VideoPath.is_deleted == False).all()
     for video in videos:
         video.is_deleted = True
         video.update_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        session.add(video)
+        # session.add(video)
     stages = session.query(Stage).filter(
         Stage.action_id == action_id, Stage.is_deleted == False).all()
     for stage in stages:
         stage.is_deleted = True
         stage.update_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        session.add(stage)
+        # session.add(stage)
         steps_info = session.query(StepsInfo).filter(
             StepsInfo.stage_id == stage.id, StepsInfo.is_deleted == False).all()
         for step_info in steps_info:
             step_info.is_deleted = True
             step_info.update_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            session.add(step_info)
+            # session.add(step_info)
     session.commit()
     redis_conn.lrem("waiting_actions", 0,
                     f"{action.patient_id}-{action_id}-{action.video_id}")
