@@ -24,7 +24,5 @@ jobs:
           ssh -i /home/runner/.ssh/id_ed25519 \
               tug@213.35.119.238 -p 2200 \
               "cd ~/StrikeAPose && \
-               git stash && git pull origin main && git stash apply && \
-            #    docker compose down && \
-            #    docker compose up -d --build && \
+               git stash && git pull origin main && \
                echo 'Deployment completed successfully.'"  # 如果使用 Docker

@@ -30,7 +30,7 @@ services:
       - backend
     environment:
       - REDIS_HOST=redis-db
-      - CORE_SERVICE_HOST=core-new
+      - CORE_SERVICE_HOST=core
       - BACKEND_HOST=backend
     container_name: pose-queue
     # network_mode: host 
