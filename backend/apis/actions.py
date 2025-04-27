@@ -88,6 +88,9 @@ async def create_action(action: CreateAction = Body(...), session: SessionDep = 
 async def get_actions(patient_id: int, session: SessionDep = SessionDep):
     actions = session.query(Action).filter(
         Action.patient_id == patient_id, Action.is_deleted == False).all()
+    if not actions:
+        return {"message": "No actions found"}
+    actions = sorted(actions, key=lambda x: x.create_time)
     return {"actions": [action.to_dict() for action in actions]}
 
 
@@ -105,7 +108,8 @@ async def get_action_by_parent_id(parent_id: int, session: SessionDep = SessionD
     action = session.query(Action).filter(
         Action.parent_id == parent_id, Action.is_deleted == False).all()
     if not action:
-        return {"message": "Action not found"}
+        return {"message": "No actions found"}
+    action = sorted(action, key=lambda x: x.create_time)
     return {"action": [a.to_dict() for a in action]}
 
 
@@ -117,25 +121,37 @@ async def delete_action(action_id: int, session: SessionDep = SessionDep):
         return {"message": "Action not found"}
     action.is_deleted = True
     action.update_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    # session.add(action)
-    videos = session.query(VideoPath).filter(
-        VideoPath.action_id == action_id, VideoPath.is_deleted == False).all()
-    for video in videos:
-        video.is_deleted = True
-        video.update_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        # session.add(video)
+    if action.parent_id == action_id:
+        actions = session.query(Action).filter(
+            Action.parent_id == action_id, Action.is_deleted == False).all()
+        for action_ in actions:
+            action_.is_deleted = True
+            action_.update_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            stages = session.query(Stage).filter(
+                Stage.action_id == action_.id, Stage.is_deleted == False).all()
+            for stage in stages:
+                stage.is_deleted = True
+                stage.update_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                steps_info = session.query(StepsInfo).filter(
+                    StepsInfo.stage_id == stage.id, StepsInfo.is_deleted == False).all()
+                for step_info in steps_info:
+                    step_info.is_deleted = True
+                    step_info.update_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        videos = session.query(VideoPath).filter(
+            VideoPath.action_id == action_id, VideoPath.is_deleted == False).all()
+        for video in videos:
+            video.is_deleted = True
+            video.update_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     stages = session.query(Stage).filter(
         Stage.action_id == action_id, Stage.is_deleted == False).all()
     for stage in stages:
         stage.is_deleted = True
         stage.update_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        # session.add(stage)
         steps_info = session.query(StepsInfo).filter(
             StepsInfo.stage_id == stage.id, StepsInfo.is_deleted == False).all()
         for step_info in steps_info:
             step_info.is_deleted = True
             step_info.update_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            # session.add(step_info)
     session.commit()
     redis_conn.lrem("waiting_actions", 0,
                     f"{action.patient_id}-{action_id}-{action.video_id}")

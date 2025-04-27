@@ -6,7 +6,7 @@ import csv
 import json
 import matplotlib.pyplot as plt
 from ultralytics import YOLO
-from check_point_v8 import get_featurepoints2, caculate_output
+from keypoints_processing import get_featurepoints2, caculate_output
 from tqdm import tqdm
 import requests
 

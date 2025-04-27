@@ -37,43 +37,27 @@ services:
     networks:
       - strike
     restart: always
-  # core:
-  #   image: gaeawang/strikeapose-core:0.0.1
-  #   ports:
-  #     - "8001:8001"
-  #   depends_on:
-  #     - db
-  #     - redis-db
-  #     - backend
-  #   environment:
-  #     - NVIDIA_VISIBLE_DEVICES=all
-  #     - BACKEND_HOST=backend
-  #   container_name: pose-core
-  #   networks:
-  #     - strike
-  #   restart: always
-  #   volumes:
-  #     - /data/pose/videos:/data/videos
-  #     - ./core:/workspace
-  #   command: python app.py
-  #   runtime: nvidia
-  core-new:
+  core:
     build:
       context: .
-      dockerfile: ./core-new/Dockerfile
+      dockerfile: ./core/Dockerfile
     ports:
       - "8001:8001"
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
       - BACKEND_HOST=backend
-    container_name: pose-core-new
+    container_name: pose-core   
+    depends_on:
+      - db
+      - redis-db
+      - backend
     networks:
       - strike
     restart: always
     runtime: nvidia
     volumes:
       - /data/pose/videos:/data/videos
-      - ./core-new:/workspace
+      - ./core:/workspace
     command: python app.py
   db:
     image: postgres:14

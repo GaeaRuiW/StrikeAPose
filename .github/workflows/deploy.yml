@@ -25,6 +25,6 @@ jobs:
               tug@213.35.119.238 -p 2200 \
               "cd ~/StrikeAPose && \
                git stash && git pull origin main && git stash apply && \
-               docker compose down && \
-               docker compose up -d --build && \
+            #    docker compose down && \
+            #    docker compose up -d --build && \
                echo 'Deployment completed successfully.'"  # 如果使用 Docker

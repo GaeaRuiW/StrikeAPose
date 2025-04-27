@@ -29,11 +29,11 @@ def get_step_hip_degree_overlap(action_id: int, session: SessionDep = SessionDep
             y_high_data.append(round(step_info.hip_max_degree, 2))
             step += 1
 
-    line = Line({"theme": "dark"})
+    line = Line({"theme": "light"})
     line.add_xaxis(xaxis_data=x_data)
 
     line.add_yaxis(
-        series_name="Low",
+        series_name="最小值",
         y_axis=y_low_data,
         is_smooth=True,
         areastyle_opts=opts.AreaStyleOpts(opacity=0.3),
@@ -41,7 +41,7 @@ def get_step_hip_degree_overlap(action_id: int, session: SessionDep = SessionDep
     )
 
     line.add_yaxis(
-        series_name="High",
+        series_name="最大值",
         y_axis=y_high_data,
         is_smooth=True,
         areastyle_opts=opts.AreaStyleOpts(opacity=0.3),

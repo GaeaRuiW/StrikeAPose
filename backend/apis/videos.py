@@ -6,6 +6,7 @@ from config import video_dir
 from fastapi import APIRouter, File, Request, UploadFile, Body
 from fastapi.responses import StreamingResponse
 from models import SessionDep, Patients, VideoPath, Doctors, Action, Stage, StepsInfo
+from sqlalchemy import asc
 from pydantic import BaseModel
 
 router = APIRouter(tags=["videos"], prefix="/videos")
@@ -150,6 +151,7 @@ async def stream_video(video_type: str, patient_id: int, video_id: int, session:
 async def get_videos(patient_id: int, session: SessionDep = SessionDep):
     videos = session.query(VideoPath).filter(
         VideoPath.patient_id == patient_id, VideoPath.is_deleted == False).all()
+    videos = videos.order_by(asc(VideoPath.create_time))
     return {"videos": [video.to_dict() for video in videos]}
 
 @router.get("/get_inference_video_by_original_id/{original_video_id}")
