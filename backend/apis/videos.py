@@ -152,7 +152,7 @@ async def get_videos(patient_id: int, session: SessionDep = SessionDep):
         VideoPath.patient_id == patient_id, VideoPath.is_deleted == False).all()
     if not videos:
         return {"message": "No videos found"}
-    videos = sorted(videos, key=lambda x: x.create_time)
+    videos = sorted(videos, key=lambda x: x.create_time, reverse=True)
     return {"videos": [video.to_dict() for video in videos]}
 
 @router.get("/get_inference_video_by_original_id/{original_video_id}")

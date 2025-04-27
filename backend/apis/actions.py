@@ -90,7 +90,7 @@ async def get_actions(patient_id: int, session: SessionDep = SessionDep):
         Action.patient_id == patient_id, Action.is_deleted == False).all()
     if not actions:
         return {"message": "No actions found"}
-    actions = sorted(actions, key=lambda x: x.create_time)
+    actions = sorted(actions, key=lambda x: x.create_time, reverse=True)
     return {"actions": [action.to_dict() for action in actions]}
 
 
@@ -109,7 +109,7 @@ async def get_action_by_parent_id(parent_id: int, session: SessionDep = SessionD
         Action.parent_id == parent_id, Action.is_deleted == False).all()
     if not action:
         return {"message": "No actions found"}
-    action = sorted(action, key=lambda x: x.create_time)
+    action = sorted(action, key=lambda x: x.create_time, reverse=True)
     return {"action": [a.to_dict() for a in action]}
 
 
