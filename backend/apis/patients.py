@@ -25,6 +25,21 @@ class UpdatePatientModel(BaseModel):
     patient_id: int
     username: str
 
+class PatientLoginModel(BaseModel):
+    case_id: str
+    verify_case_id: str
+
+
+@router.post("/patient_login")
+def patient_login(patient: PatientLoginModel = Body(..., embed=True), session: SessionDep = SessionDep):
+    patient_ = session.query(Patients).filter(
+        Patients.case_id == patient.case_id, Patients.is_deleted == False).first()
+    if not patient_:
+        return {"message": "Patient not found"}
+    if patient_.case_id != patient.verify_case_id:
+        return {"message": "Case ID verification failed"}
+    return {"message": "Login successful", "patient": patient_.to_dict()}
+
 
 @router.put("/insert_patient")
 def insert_patient(patient: CreatePatientModel = Body(..., embed=True), session: SessionDep = SessionDep):
