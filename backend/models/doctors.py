@@ -9,12 +9,13 @@ class Doctors(SQLModel, table=True):
     password: str
     email: str
     phone: str
+    department: str = Field(default="康复科")
     role_id: int = Field(default=1)
     create_time: str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     update_time: str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     is_deleted: bool
 
-    def __init__(self, username: str, password: str, email: str, phone: int, create_time: str, update_time: str, is_deleted: bool, role_id: int = 1):
+    def __init__(self, username: str, password: str, email: str, phone: int, create_time: str, update_time: str, is_deleted: bool, department: str = "康复科", role_id: int = 1):
         self.username = username
         self.password = password
         self.email = email
@@ -23,6 +24,7 @@ class Doctors(SQLModel, table=True):
         self.create_time = create_time
         self.update_time = update_time
         self.is_deleted = is_deleted
+        self.department = department
 
     def to_dict(self):
         return {
@@ -33,5 +35,6 @@ class Doctors(SQLModel, table=True):
             "role_id": self.role_id,
             "create_time": self.create_time,
             "update_time": self.update_time,
-            "is_deleted": self.is_deleted
+            "is_deleted": self.is_deleted,
+            "department": self.department
         }

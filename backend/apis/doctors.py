@@ -13,6 +13,7 @@ class CreateDoctorModel(BaseModel):
     password: str
     email: str
     phone: str
+    department: str = "康复科"
 
 
 class UpdateDoctorModel(BaseModel):
@@ -20,6 +21,7 @@ class UpdateDoctorModel(BaseModel):
     email: str
     phone: str
     password: str
+    department: str = "康复科"
 
 
 class LoginModel(BaseModel):
@@ -32,7 +34,7 @@ class DeleteDoctorModel(BaseModel):
 @router.post("/register")
 def register_doctor(doctor: CreateDoctorModel = Body(..., embed=True), session: SessionDep = SessionDep):
     doctor = Doctors(username=doctor.username, password=hash_password(
-        doctor.password), email=doctor.email, phone=doctor.phone, create_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"), update_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"), is_deleted=False)
+        doctor.password), email=doctor.email, phone=doctor.phone, create_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"), update_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"), is_deleted=False, department=doctor.department)
     session.add(doctor)
     session.commit()
     return doctor.to_dict()
@@ -61,6 +63,7 @@ def update_doctor_by_id(doctor: UpdateDoctorModel = Body(..., embed=True), sessi
     doctor_db.phone = doctor.phone
     doctor_db.password = hash_password(doctor.password)
     doctor_db.update_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    doctor_db.department = doctor.department
     session.commit()
     return doctor_db.to_dict()
 
