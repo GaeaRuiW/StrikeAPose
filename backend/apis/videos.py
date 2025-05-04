@@ -2,10 +2,12 @@ import os
 import uuid
 from datetime import datetime
 
+from common.utils import generate_thumbnail
 from config import video_dir
-from fastapi import APIRouter, File, Request, UploadFile, Body
+from fastapi import APIRouter, Body, File, Request, UploadFile
 from fastapi.responses import StreamingResponse
-from models import SessionDep, Patients, VideoPath, Doctors, Action, Stage, StepsInfo
+from models import (Action, Doctors, Patients, SessionDep, Stage, StepsInfo,
+                    VideoPath)
 from pydantic import BaseModel
 
 router = APIRouter(tags=["videos"], prefix="/videos")
@@ -29,13 +31,14 @@ async def delete_video(video: DeleteVideo = Body(...), session: SessionDep = Ses
         if not video_:
             return {"message": "Video not found or this doctor does not have permission to delete this video"}
     else:
-        video_ = session.query(VideoPath).filter(VideoPath.id == video.video_id, VideoPath.is_deleted == False, VideoPath.patient_id == video.patient_id).first()
+        video_ = session.query(VideoPath).filter(VideoPath.id == video.video_id,
+                                                 VideoPath.is_deleted == False, VideoPath.patient_id == video.patient_id).first()
     if not video_:
         return {"message": "Video not found"}
     action_id = video_.action_id
     if not action_id:
         session.delete(video_)
-        session.commit()
+        await session.commit()
         return {"message": "Video deleted successfully"}
     all_videos = session.query(VideoPath).filter(
         VideoPath.action_id == action_id, VideoPath.is_deleted == False).all()
@@ -59,7 +62,7 @@ async def delete_video(video: DeleteVideo = Body(...), session: SessionDep = Ses
         return {"message": "Video deleted successfully"}
     for action_ in all_actions:
         all_stages = session.query(Stage).filter(
-        Stage.action_id == action_id, Stage.is_deleted == False).all()
+            Stage.action_id == action_id, Stage.is_deleted == False).all()
         if not all_stages:
             session.commit()
             return {"message": "Video deleted successfully"}
@@ -72,9 +75,10 @@ async def delete_video(video: DeleteVideo = Body(...), session: SessionDep = Ses
                 session.delete(step)
             session.delete(stage_)
         session.delete(action_)
-    session.commit()
+    await session.commit()
 
     return {"message": "Video deleted successfully"}
+
 
 @router.post("/upload/{patient_id}")
 async def upload_video(patient_id: int, video: UploadFile = File(...), session: SessionDep = SessionDep):
@@ -101,7 +105,7 @@ async def upload_video(patient_id: int, video: UploadFile = File(...), session: 
     new_video = VideoPath(video_path=video_path, patient_id=patient_id, original_video=True, inference_video=False, is_deleted=False,
                           create_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"), update_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
     session.add(new_video)
-    session.commit()
+    await session.commit()
     return {"message": "Video uploaded successfully", "video_id": new_video.id}
 
 
@@ -146,6 +150,28 @@ async def stream_video(video_type: str, patient_id: int, video_id: int, session:
     return StreamingResponse(open(video_path, "rb"), media_type="video/mp4")
 
 
+@router.get("/thumbnail_image/{video_type}/{patient_id}/{video_id}")
+async def get_thumbnail_image(video_type: str, patient_id: int, video_id: int, session: SessionDep = SessionDep):
+    if video_type not in ["original", "inference"]:
+        return {"message": "Invalid video type"}
+    video = session.query(VideoPath).filter(
+        VideoPath.id == video_id,
+        VideoPath.patient_id == patient_id,
+        VideoPath.original_video == (video_type == "original"),
+        VideoPath.inference_video == (video_type == "inference"),
+        VideoPath.is_deleted == False
+    ).first()
+
+    if not video:
+        return {"message": "Video not found"}
+
+    image_path = video.video_path.replace("mp4", "jpg")
+    if not os.path.exists(image_path):
+        generate_thumbnail(video.video_path, image_path, time=1)
+
+    return StreamingResponse(open(image_path, "rb"), media_type="image/jpeg")
+
+
 @router.get("/get_videos/{patient_id}")
 async def get_videos(patient_id: int, session: SessionDep = SessionDep):
     videos = session.query(VideoPath).filter(
@@ -154,6 +180,7 @@ async def get_videos(patient_id: int, session: SessionDep = SessionDep):
         return {"message": "No videos found"}
     videos = sorted(videos, key=lambda x: x.create_time, reverse=True)
     return {"videos": [video.to_dict() for video in videos]}
+
 
 @router.get("/get_inference_video_by_original_id/{original_video_id}")
 async def get_video_by_original(original_video_id: int, session: SessionDep = SessionDep):
@@ -169,6 +196,7 @@ async def get_video_by_original(original_video_id: int, session: SessionDep = Se
         VideoPath.inference_video == True,
         VideoPath.is_deleted == False).first()
     return reference_video.to_dict() if reference_video else {"message": "Reference video not found"}
+
 
 @router.get("/get_video_by_id/{video_id}")
 async def get_video_by_id(video_id: int, session: SessionDep = SessionDep):
@@ -187,5 +215,5 @@ async def insert_inference_video(action_id: int, session: SessionDep = SessionDe
     new_video = VideoPath(video_path=new_video_path, patient_id=video.patient_id, original_video=False, inference_video=True, is_deleted=False, action_id=action_id,
                           create_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"), update_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
     session.add(new_video)
-    session.commit()
+    await session.commit()
     return {"message": "Inference video inserted successfully", "video_id": new_video.id}

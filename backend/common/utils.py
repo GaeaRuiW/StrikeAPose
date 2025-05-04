@@ -2,6 +2,7 @@ import os
 import statistics
 
 import bcrypt
+import cv2
 import redis
 from config import length_to_show, redis_db, redis_host, redis_port
 
@@ -37,3 +38,12 @@ def calculate_stats(data: list[float | int | None]) -> tuple[float, float]:
         std_dev = statistics.stdev(filtered_data)
 
     return round(average, 2), round(std_dev, 2)
+
+
+def generate_thumbnail(video_path: str, thumbnail_path: str, time: int = 1):
+    cap = cv2.VideoCapture(video_path)
+    cap.set(cv2.CAP_PROP_POS_MSEC, time * 1000)
+    success, image = cap.read()
+    if success:
+        cv2.imwrite(thumbnail_path, image)
+    cap.release()

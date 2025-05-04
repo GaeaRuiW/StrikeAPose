@@ -5,3 +5,4 @@ uvicorn
 sqlmodel
 pyecharts
 psycopg2
+opencv-python-headless
