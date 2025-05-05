@@ -1,14 +1,17 @@
 import os
 import uuid
+import shutil
+import tempfile
 from datetime import datetime
 
 from common.utils import convert_to_mp4, generate_thumbnail
 from config import video_dir
-from fastapi import APIRouter, Body, File, Request, UploadFile
+from fastapi import APIRouter, Body, File, Request, UploadFile, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from models import (Action, Doctors, Patients, SessionDep, Stage, StepsInfo,
                     VideoPath)
 from pydantic import BaseModel
+from starlette.concurrency import run_in_threadpool
 
 router = APIRouter(tags=["videos"], prefix="/videos")
 
@@ -81,40 +84,118 @@ def delete_video(video: DeleteVideo = Body(...), session: SessionDep = SessionDe
 
 
 @router.post("/upload/{patient_id}")
-def upload_video(patient_id: int, video: UploadFile = File(...), session: SessionDep = SessionDep):
+async def upload_video(patient_id: int, video: UploadFile = File(...), session: SessionDep = Depends()): # Use Depends() for SessionDep, make endpoint async
     patient = session.query(Patients).filter(
         Patients.id == patient_id, Patients.is_deleted == False).first()
     if not patient:
-        return {"message": "Patient not found"}
-    if not video.content_type.startswith("video/"):
-        return {"message": "Invalid file type"}
+        raise HTTPException(status_code=404, detail="Patient not found") # Use HTTPException
+
+    if not video.content_type or not video.content_type.startswith("video/"):
+        raise HTTPException(status_code=400, detail="Invalid file content type")
+
+    # More robust format check (still relies on filename)
+    supported_formats = ('.avi', '.mov', '.wmv', '.mkv', '.flv', '.mp4v', '.m4v', '.rmvb',
+                         '.webm', '.mpeg', '.mpg', '.ts', '.vob', '.mp4')
+    original_filename = video.filename if video.filename else "unknown_video"
+    file_ext = os.path.splitext(original_filename)[1].lower()
+
+    if not file_ext:
+        raise HTTPException(status_code=400, detail="File has no extension")
+
+    if file_ext not in supported_formats:
+        raise HTTPException(status_code=400, detail=f"Unsupported file format: {file_ext}")
+
     gen_uuid = uuid.uuid4().hex[:8]
-    video_path = f"{video_dir}/original/{patient_id}-{video.filename}-{gen_uuid}.mp4"
-    supported_formats = ('avi', 'mov', 'wmv', 'mkv', 'flv', 'mp4v', 'm4v', 'rmvb', 
-                         'webm', 'mpeg', 'mpg', 'ts', 'vob', 'mp4')
-    video_format = video.filename.split(".")[-1]
-    if video_format not in supported_formats:
-        return {"message": "Invalid file format"}
-    if video_format != "mp4":
-        with open(f"/tmp/{video.filename}", "wb") as f:
-            f.write(video.read())
-        if not convert_to_mp4(f"/tmp/{video.filename}", video_path):
-            os.remove(f"/tmp/{video.filename}")
-            return {"message": "Video conversion failed"}
-    file_size = 0
-    chunk_size = 1024 * 1024
-    with open(video_path, "wb") as f:
-        while True:
-            chunk = video.read(chunk_size)
-            if not chunk:
-                break
-            file_size += len(chunk)
-            f.write(chunk)
-    new_video = VideoPath(video_path=video_path, patient_id=patient_id, original_video=True, inference_video=False, is_deleted=False,
-                          create_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"), update_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-    session.add(new_video)
-    session.commit()
-    return {"message": "Video uploaded successfully", "video_id": new_video.id}
+    # Sanitize filename a bit
+    safe_base_filename = os.path.splitext(original_filename)[0].replace(" ", "_").replace("/", "_")
+    final_filename_base = f"{patient_id}-{safe_base_filename}-{gen_uuid}"
+    # Define final path assuming MP4 output
+    final_video_path = os.path.join(video_dir, "original", f"{final_filename_base}.mp4")
+    final_video_dir = os.path.dirname(final_video_path)
+
+    # Ensure output directory exists
+    os.makedirs(final_video_dir, exist_ok=True)
+
+    temp_file_path = None
+    try:
+        # --- Step 1: Save uploaded file to a temporary location ---
+        # Use NamedTemporaryFile for automatic cleanup on error (usually)
+        # Keep the original extension for the temporary file
+        # Use a temporary directory known to be on the same filesystem as final_video_dir
+        # if possible, otherwise shutil.move might perform a copy. /tmp is common.
+        with tempfile.NamedTemporaryFile(delete=False, suffix=file_ext, dir="/tmp") as temp_f:
+            temp_file_path = temp_f.name
+            size = 0
+            chunk_size = 1024 * 1024  # 1MB chunks
+            while True:
+                # Use await to read the async stream
+                chunk = await video.read(chunk_size)
+                if not chunk:
+                    break
+                size += len(chunk)
+                temp_f.write(chunk)
+            print(f"Temporary file saved: {temp_file_path}, Size: {size}") # Logging
+
+        # --- Step 2: Convert if necessary OR move if already MP4 ---
+        if file_ext != ".mp4":
+            print(f"Converting {temp_file_path} to {final_video_path}...")
+            # Run the synchronous convert_to_mp4 (using FFmpeg) in a threadpool
+            # to avoid blocking the async event loop.
+            conversion_success = await run_in_threadpool(convert_to_mp4, temp_file_path, final_video_path)
+
+            if not conversion_success:
+                # convert_to_mp4 should ideally log its own errors
+                print(f"Conversion failed for {temp_file_path}")
+                raise HTTPException(status_code=500, detail="Video conversion failed")
+            else:
+                 print(f"Conversion successful: {final_video_path}")
+                 # Conversion done, original temp file can be removed now
+                 os.remove(temp_file_path)
+                 temp_file_path = None # Mark as removed
+
+        else:
+            # It's already MP4, just move the temporary file to the final location
+            print(f"Moving {temp_file_path} to {final_video_path}...")
+            shutil.move(temp_file_path, final_video_path)
+            temp_file_path = None # Mark as moved
+
+        # --- Step 3: Add record to database ---
+        current_time = datetime.now() # Use datetime objects if DB column type allows
+        new_video = VideoPath(
+            video_path=final_video_path,
+            patient_id=patient_id,
+            original_video=True,
+            inference_video=False,
+            is_deleted=False,
+            create_time=current_time,
+            update_time=current_time
+        )
+        session.add(new_video)
+        session.commit()
+        session.refresh(new_video) # Get the generated ID
+
+        return {"message": "Video uploaded successfully", "video_id": new_video.id}
+
+    except HTTPException as http_exc:
+         # If an HTTPException was raised earlier, re-raise it
+         raise http_exc
+    except Exception as e:
+        # Catch any other unexpected errors during processing
+        print(f"ERROR during video upload processing: {e}")
+        import traceback
+        traceback.print_exc() # Log the full traceback for debugging
+        # Return a generic server error
+        raise HTTPException(status_code=500, detail=f"An internal error occurred: {e}")
+    finally:
+        # --- Cleanup: Ensure temporary file is deleted if something went wrong ---
+        if temp_file_path and os.path.exists(temp_file_path):
+            print(f"Cleaning up leftover temporary file: {temp_file_path}")
+            try:
+                os.remove(temp_file_path)
+            except OSError as rm_err:
+                print(f"Error removing temporary file {temp_file_path}: {rm_err}")
+        # Ensure the underlying file stream is closed
+        await video.close()
 
 
 @router.get("/stream/{video_type}/{patient_id}/{video_id}")
