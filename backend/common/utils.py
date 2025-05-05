@@ -79,13 +79,6 @@ def convert_to_mp4(input_path, output_path, ffmpeg_executable="ffmpeg"):
     try:
         result = subprocess.run(command, check=True, capture_output=True, text=True)
         print("转换成功!")
-        # delete the input file if conversion is successful
-        if os.path.exists(input_path):
-            try:
-                os.remove(input_path)
-                print(f"已删除输入文件: {input_path}")
-            except OSError as remove_err:
-                print(f"警告：无法删除输入文件 {input_path}: {remove_err}")
         return True
     except FileNotFoundError:
         print(f"错误：找不到 FFmpeg 可执行文件 '{ffmpeg_executable}'。请检查路径或 PATH 设置。")
