@@ -2,7 +2,7 @@ import os
 import uuid
 from datetime import datetime
 
-from common.utils import generate_thumbnail
+from common.utils import convert_to_mp4, generate_thumbnail
 from config import video_dir
 from fastapi import APIRouter, Body, File, Request, UploadFile
 from fastapi.responses import StreamingResponse
@@ -88,13 +88,21 @@ async def upload_video(patient_id: int, video: UploadFile = File(...), session: 
         return {"message": "Patient not found"}
     if not video.content_type.startswith("video/"):
         return {"message": "Invalid file type"}
-    if not video.filename.endswith(".mp4"):
-        return {"message": "Only mp4 files are allowed"}
-
-    file_size = 0
-    chunk_size = 1024 * 1024
     gen_uuid = uuid.uuid4().hex[:8]
     video_path = f"{video_dir}/original/{patient_id}-{video.filename}-{gen_uuid}.mp4"
+    supported_formats = ('avi', 'mov', 'wmv', 'mkv', 'flv', 'mp4v', 'm4v', 'rmvb', 
+                         'webm', 'mpeg', 'mpg', 'ts', 'vob', 'mp4')
+    video_format = video.filename.split(".")[-1]
+    if video_format not in supported_formats:
+        return {"message": "Invalid file format"}
+    if video_format != "mp4":
+        with open(f"/tmp/{video.filename}", "wb") as f:
+            f.write(await video.read())
+        if not convert_to_mp4(f"/tmp/{video.filename}", video_path):
+            os.remove(f"/tmp/{video.filename}")
+            return {"message": "Video conversion failed"}
+    file_size = 0
+    chunk_size = 1024 * 1024
     with open(video_path, "wb") as f:
         while True:
             chunk = await video.read(chunk_size)
