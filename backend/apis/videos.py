@@ -38,7 +38,7 @@ async def delete_video(video: DeleteVideo = Body(...), session: SessionDep = Ses
     action_id = video_.action_id
     if not action_id:
         session.delete(video_)
-        await session.commit()
+        session.commit()
         return {"message": "Video deleted successfully"}
     all_videos = session.query(VideoPath).filter(
         VideoPath.action_id == action_id, VideoPath.is_deleted == False).all()
@@ -75,7 +75,7 @@ async def delete_video(video: DeleteVideo = Body(...), session: SessionDep = Ses
                 session.delete(step)
             session.delete(stage_)
         session.delete(action_)
-    await session.commit()
+    session.commit()
 
     return {"message": "Video deleted successfully"}
 
@@ -105,7 +105,7 @@ async def upload_video(patient_id: int, video: UploadFile = File(...), session: 
     new_video = VideoPath(video_path=video_path, patient_id=patient_id, original_video=True, inference_video=False, is_deleted=False,
                           create_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"), update_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
     session.add(new_video)
-    await session.commit()
+    session.commit()
     return {"message": "Video uploaded successfully", "video_id": new_video.id}
 
 
@@ -215,5 +215,5 @@ async def insert_inference_video(action_id: int, session: SessionDep = SessionDe
     new_video = VideoPath(video_path=new_video_path, patient_id=video.patient_id, original_video=False, inference_video=True, is_deleted=False, action_id=action_id,
                           create_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"), update_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
     session.add(new_video)
-    await session.commit()
+    session.commit()
     return {"message": "Inference video inserted successfully", "video_id": new_video.id}
