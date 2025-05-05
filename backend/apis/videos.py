@@ -7,7 +7,7 @@ from datetime import datetime
 from common.utils import convert_to_mp4, generate_thumbnail
 from config import video_dir
 from fastapi import APIRouter, Body, File, Request, UploadFile, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, FileResponse
 from models import (Action, Doctors, Patients, SessionDep, Stage, StepsInfo,
                     VideoPath)
 from pydantic import BaseModel
@@ -224,14 +224,16 @@ def get_video(video_type: str, patient_id: int, video_id: int, session: SessionD
         return {"message": "Video not found"}
 
     video_path = video.video_path
-    file_size = os.path.getsize(video_path)
+    if not os.path.isfile(video_path):
+        # Log this inconsistency server-side
+        print(f"Error: Database record found for video ID {video_id}, but file not found at {video_path}")
+        raise HTTPException(status_code=404, detail="Video file not found on server.")
 
-    headers = {
-        "Content-Length": file_size,
-        "Content-Type": "video/mp4",
-    }
-
-    return StreamingResponse(open(video_path, "rb"), media_type="video/mp4", headers=headers)
+    return FileResponse(
+        path=video_path,
+        media_type="video/mp4",
+        filename=os.path.basename(video_path)
+    )
 
 
 @router.get("/stream/{video_type}/{patient_id}/{video_id}")
