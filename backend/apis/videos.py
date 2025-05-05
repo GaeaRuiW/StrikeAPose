@@ -20,7 +20,7 @@ class DeleteVideo(BaseModel):
 
 
 @router.delete("/delete_video")
-async def delete_video(video: DeleteVideo = Body(...), session: SessionDep = SessionDep):
+def delete_video(video: DeleteVideo = Body(...), session: SessionDep = SessionDep):
     doctor = session.query(Doctors).filter(
         Doctors.id == video.doctor_id, Doctors.is_deleted == False).first()
     if not doctor:
@@ -81,7 +81,7 @@ async def delete_video(video: DeleteVideo = Body(...), session: SessionDep = Ses
 
 
 @router.post("/upload/{patient_id}")
-async def upload_video(patient_id: int, video: UploadFile = File(...), session: SessionDep = SessionDep):
+def upload_video(patient_id: int, video: UploadFile = File(...), session: SessionDep = SessionDep):
     patient = session.query(Patients).filter(
         Patients.id == patient_id, Patients.is_deleted == False).first()
     if not patient:
@@ -97,7 +97,7 @@ async def upload_video(patient_id: int, video: UploadFile = File(...), session: 
         return {"message": "Invalid file format"}
     if video_format != "mp4":
         with open(f"/tmp/{video.filename}", "wb") as f:
-            f.write(await video.read())
+            f.write(video.read())
         if not convert_to_mp4(f"/tmp/{video.filename}", video_path):
             os.remove(f"/tmp/{video.filename}")
             return {"message": "Video conversion failed"}
@@ -105,7 +105,7 @@ async def upload_video(patient_id: int, video: UploadFile = File(...), session: 
     chunk_size = 1024 * 1024
     with open(video_path, "wb") as f:
         while True:
-            chunk = await video.read(chunk_size)
+            chunk = video.read(chunk_size)
             if not chunk:
                 break
             file_size += len(chunk)
@@ -118,7 +118,7 @@ async def upload_video(patient_id: int, video: UploadFile = File(...), session: 
 
 
 @router.get("/stream/{video_type}/{patient_id}/{video_id}")
-async def stream_video(video_type: str, patient_id: int, video_id: int, session: SessionDep = SessionDep, request: Request = None):
+def stream_video(video_type: str, patient_id: int, video_id: int, session: SessionDep = SessionDep, request: Request = None):
     if video_type not in ["original", "inference"]:
         return {"message": "Invalid video type"}
     video = session.query(VideoPath).filter(
@@ -159,7 +159,7 @@ async def stream_video(video_type: str, patient_id: int, video_id: int, session:
 
 
 @router.get("/thumbnail_image/{video_type}/{patient_id}/{video_id}")
-async def get_thumbnail_image(video_type: str, patient_id: int, video_id: int, session: SessionDep = SessionDep):
+def get_thumbnail_image(video_type: str, patient_id: int, video_id: int, session: SessionDep = SessionDep):
     if video_type not in ["original", "inference"]:
         return {"message": "Invalid video type"}
     video = session.query(VideoPath).filter(
@@ -181,7 +181,7 @@ async def get_thumbnail_image(video_type: str, patient_id: int, video_id: int, s
 
 
 @router.get("/get_videos/{patient_id}")
-async def get_videos(patient_id: int, session: SessionDep = SessionDep):
+def get_videos(patient_id: int, session: SessionDep = SessionDep):
     videos = session.query(VideoPath).filter(
         VideoPath.patient_id == patient_id, VideoPath.is_deleted == False).all()
     if not videos:
@@ -191,7 +191,7 @@ async def get_videos(patient_id: int, session: SessionDep = SessionDep):
 
 
 @router.get("/get_inference_video_by_original_id/{original_video_id}")
-async def get_video_by_original(original_video_id: int, session: SessionDep = SessionDep):
+def get_video_by_original(original_video_id: int, session: SessionDep = SessionDep):
     video = session.query(VideoPath).filter(
         VideoPath.id == original_video_id, VideoPath.is_deleted == False).first()
     if not video:
@@ -207,14 +207,14 @@ async def get_video_by_original(original_video_id: int, session: SessionDep = Se
 
 
 @router.get("/get_video_by_id/{video_id}")
-async def get_video_by_id(video_id: int, session: SessionDep = SessionDep):
+def get_video_by_id(video_id: int, session: SessionDep = SessionDep):
     video = session.query(VideoPath).filter(
         VideoPath.id == video_id, VideoPath.is_deleted == False).first()
     return video.to_dict() if video else {"message": "Video not found"}
 
 
 @router.post("/insert_inference_video/{action_id}")
-async def insert_inference_video(action_id: int, session: SessionDep = SessionDep):
+def insert_inference_video(action_id: int, session: SessionDep = SessionDep):
     video = session.query(VideoPath).filter(
         VideoPath.action_id == action_id, VideoPath.is_deleted == False).first()
     if not video:
