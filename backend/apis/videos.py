@@ -6,7 +6,7 @@ from datetime import datetime
 
 from common.utils import convert_to_mp4, generate_thumbnail
 from config import video_dir
-from fastapi import APIRouter, Body, File, Request, UploadFile, Depends, HTTPException
+from fastapi import APIRouter, Body, File, Request, UploadFile, HTTPException
 from fastapi.responses import StreamingResponse
 from models import (Action, Doctors, Patients, SessionDep, Stage, StepsInfo,
                     VideoPath)
@@ -84,7 +84,7 @@ def delete_video(video: DeleteVideo = Body(...), session: SessionDep = SessionDe
 
 
 @router.post("/upload/{patient_id}")
-async def upload_video(patient_id: int, video: UploadFile = File(...), session: SessionDep = Depends()): # Use Depends() for SessionDep, make endpoint async
+async def upload_video(patient_id: int, video: UploadFile = File(...), session: SessionDep = SessionDep): # Use Depends() for SessionDep, make endpoint async
     patient = session.query(Patients).filter(
         Patients.id == patient_id, Patients.is_deleted == False).first()
     if not patient:
