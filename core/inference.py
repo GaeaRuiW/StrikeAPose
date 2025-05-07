@@ -46,11 +46,12 @@ def get_perspective_matrix(frame, point_model, frame_count, orig_frame, fps=24.0
             bottom_left, top_left, top_right, bottom_right = points
             sorted_points = [bottom_left, top_left, top_right, bottom_right]
             print(f"Sorted points: {sorted_points}")
-            
+            '''
             # 绘制标记连线并保存截图
             for i in range(4):
                 cv2.line(frame, sorted_points[i], sorted_points[(i+1)%4], (0, 255, 255), 2)
             cv2.imwrite("data/1-calibration_screenshot.png", frame)
+            '''
         else:
             ret, sorted_points = get_featurepoints2(orig_frame)
             print(f"Frame {frame_count}: OpenCV fallback - {'success' if ret else 'failed'}")
@@ -80,8 +81,31 @@ def main(action_id, input_video_file, out_video_file, out_json_file, out_warped_
     pose_model = YOLO(pose_model_path)
     point_model = YOLO(point_model_path)
     
-    mid_video_file = 'mid_video.mp4'
+    # 读取第一帧判断镜像需求
     cap = cv2.VideoCapture(input_video_file)
+    if not cap.isOpened():
+        print(f"Failed to open input video: {input_video_file}")
+        return
+    ret, first_frame = cap.read()
+    if not ret:
+        print("Failed to read first frame for mirror check")
+        return
+    results = pose_model.predict(first_frame, conf=0.8, iou=0.2, verbose=False)[0]
+    keypoints_ = results.keypoints.xy.cpu().numpy()[0]
+    mirror_flag = False
+    if len(keypoints_) >= 17:
+        right_hip_x = keypoints_[12][0]
+        frame_width = first_frame.shape[1]
+        if right_hip_x > frame_width / 2:
+            mirror_flag = True
+    cap.release()
+
+    cap = cv2.VideoCapture(input_video_file)  # 重新打开视频
+    mid_video_file = 'mid_video.mp4'
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    fps = 24.0
+    video_writer = cv2.VideoWriter(mid_video_file, fourcc, fps, (1280, 720))
+    
     if not cap.isOpened():
         print(f"Failed to open input video: {input_video_file}")
         return
@@ -90,10 +114,6 @@ def main(action_id, input_video_file, out_video_file, out_json_file, out_warped_
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     pbar_video = tqdm(total=total_frames, desc="Processing video frames")  # 新增进度条
 
-    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-    fps = 24.0
-    video_writer = cv2.VideoWriter(mid_video_file, fourcc, fps, (1280, 720))
-    
     if not video_writer.isOpened():
         # print(f"Failed to create output video: {mid_video_file}")
         pass
@@ -118,6 +138,9 @@ def main(action_id, input_video_file, out_video_file, out_json_file, out_warped_
             break
         
         frame_count += 1
+        # 镜像处理
+        if mirror_flag:
+            frame = cv2.flip(frame, 1)
         orig_frame = frame.copy()
         last_orig_frame = orig_frame
         
@@ -137,6 +160,16 @@ def main(action_id, input_video_file, out_video_file, out_json_file, out_warped_
             keypoints[5] = keypoints_[14]  # 右膝
             keypoints[6] = keypoints_[15]  # 左脚踝
             keypoints[7] = keypoints_[16]  # 右脚踝
+            
+            # 调整镜像后的关键点
+            if mirror_flag:
+                frame_width = frame.shape[1]
+                # 交换左右部位
+                keypoints[0], keypoints[1] = keypoints[1].copy(), keypoints[0].copy()
+                keypoints[2], keypoints[3] = keypoints[3].copy(), keypoints[2].copy()
+                keypoints[4], keypoints[5] = keypoints[5].copy(), keypoints[4].copy()
+                keypoints[6], keypoints[7] = keypoints[7].copy(), keypoints[6].copy()
+                
         else:
             pass  # 处理检测失败的情况
         
@@ -214,7 +247,7 @@ def main(action_id, input_video_file, out_video_file, out_json_file, out_warped_
 
         
          # 渲染参数到视频
-        def render_parameters_to_video(input_video_path, output_video_path, scaled_data, smoothed_speed):
+        def render_parameters_to_video(input_video_path, output_video_path, scaled_data, smoothed_speed, gait_result, mirror_flag):
             merged_data = []
             
             # 获取所有时间戳（使用缩放数据的时间轴）
@@ -264,8 +297,24 @@ def main(action_id, input_video_file, out_video_file, out_json_file, out_warped_
                 ret, frame = cap.read()
                 if not ret:
                     break
+                if mirror_flag:
+                    frame = cv2.flip(frame, 1)
                 current_time = frame_count / fps
                 frame_count += 1
+
+                # 查找当前帧对应的步态信息
+                current_step_info = None
+                current_step_number = 0
+                total_steps = sum(len(stage['steps_info']) for stage in gait_result)
+                
+                for stage in gait_result:
+                    for idx, step in enumerate(stage['steps_info']):
+                        if step['start_frame'] <= frame_count and step['end_frame'] >= frame_count:
+                            current_step_info = step
+                            current_step_number = idx + 1
+                            break
+                    if current_step_info:
+                        break
 
                 # 查找最近的时间点
                 if not merged_data:
@@ -297,8 +346,7 @@ def main(action_id, input_video_file, out_video_file, out_json_file, out_warped_
                 text = f"Time: {current_time:.2f}s"
                 text_size, _ = cv2.getTextSize(text, font, font_scale, thickness)
                 text_width, text_height = text_size
-                text_x = width - 400
-                text_y = 50
+                text_x = width - 300
 
                 # 绘制背景矩形
                 cv2.rectangle(frame, (text_x - 10, text_y - text_height - 5), 
@@ -309,48 +357,6 @@ def main(action_id, input_video_file, out_video_file, out_json_file, out_warped_
                 cv2.putText(frame, text, (text_x, text_y), font, font_scale, text_color, thickness)
 
                 # 第二行文字
-                text_y += 40
-                text = f"Right Ankle X: {right_ankle_x:.2f}m"
-                text_size, _ = cv2.getTextSize(text, font, font_scale, thickness)
-                text_width, text_height = text_size
-
-                # 绘制背景矩形
-                cv2.rectangle(frame, (text_x - 10, text_y - text_height - 5), 
-                            (text_x + text_width + 10, text_y + 5), 
-                            background_color, -1)
-
-                # 绘制文字
-                cv2.putText(frame, text, (text_x, text_y), font, font_scale, text_color, thickness)
-
-                # 第三行文字
-                text_y += 40
-                text = f"Right Ankle Y: {right_ankle_y:.2f}m"
-                text_size, _ = cv2.getTextSize(text, font, font_scale, thickness)
-                text_width, text_height = text_size
-
-                # 绘制背景矩形
-                cv2.rectangle(frame, (text_x - 10, text_y - text_height - 5), 
-                            (text_x + text_width + 10, text_y + 5), 
-                            background_color, -1)
-
-                # 绘制文字
-                cv2.putText(frame, text, (text_x, text_y), font, font_scale, text_color, thickness)
-
-                # 第四行文字
-                text_y += 40
-                text = f"Right Speed: {right_speed:.2f}m/s"
-                text_size, _ = cv2.getTextSize(text, font, font_scale, thickness)
-                text_width, text_height = text_size
-
-                # 绘制背景矩形
-                cv2.rectangle(frame, (text_x - 10, text_y - text_height - 5), 
-                            (text_x + text_width + 10, text_y + 5), 
-                            background_color, -1)
-
-                # 绘制文字
-                cv2.putText(frame, text, (text_x, text_y), font, font_scale, text_color, thickness)
-                
-                # 第五行文字
                 text_y += 40
                 text = f"Frames: {frame_count:.2f}"
                 text_size, _ = cv2.getTextSize(text, font, font_scale, thickness)
@@ -364,16 +370,101 @@ def main(action_id, input_video_file, out_video_file, out_json_file, out_warped_
                 # 绘制文字
                 cv2.putText(frame, text, (text_x, text_y), font, font_scale, text_color, thickness)
                 
-                '''
+                # 第三行文字
                 text_y += 40
-                cv2.putText(frame, f"Avg Step Length: {avg_step_length:.2f}m", 
-                            (width - 400, text_y), cv2.FONT_HERSHEY_SIMPLEX, 
-                            0.7, (0, 255, 0), 2)
+                text = f"Right Ankle X: {right_ankle_x:.2f}m"
+                text_size, _ = cv2.getTextSize(text, font, font_scale, thickness)
+                text_width, text_height = text_size
+
+                # 绘制背景矩形
+                cv2.rectangle(frame, (text_x - 10, text_y - text_height - 5), 
+                            (text_x + text_width + 10, text_y + 5), 
+                            background_color, -1)
+
+                # 绘制文字
+                cv2.putText(frame, text, (text_x, text_y), font, font_scale, text_color, thickness)
+
+                # 第四行文字
                 text_y += 40
-                cv2.putText(frame, f"Avg Step Speed: {avg_step_speed:.2f}m/s", 
-                            (width - 400, text_y), cv2.FONT_HERSHEY_SIMPLEX, 
-                            0.7, (0, 255, 0), 2)
+                text = f"Right Ankle Y: {right_ankle_y:.2f}m"
+                text_size, _ = cv2.getTextSize(text, font, font_scale, thickness)
+                text_width, text_height = text_size
+
+                # 绘制背景矩形
+                cv2.rectangle(frame, (text_x - 10, text_y - text_height - 5), 
+                            (text_x + text_width + 10, text_y + 5), 
+                            background_color, -1)
+
+                # 绘制文字
+                cv2.putText(frame, text, (text_x, text_y), font, font_scale, text_color, thickness)
+
                 '''
+                # 第五行文字
+                text_y += 40
+                text = f"Right Speed: {right_speed:.2f}m/s"
+                text_size, _ = cv2.getTextSize(text, font, font_scale, thickness)
+                text_width, text_height = text_size
+
+                # 绘制背景矩形
+                cv2.rectangle(frame, (text_x - 10, text_y - text_height - 5), 
+                            (text_x + text_width + 10, text_y + 5), 
+                            background_color, -1)
+
+                # 绘制文字
+                cv2.putText(frame, text, (text_x, text_y), font, font_scale, text_color, thickness)
+                '''
+
+                # 渲染步数和前腿信息
+                if current_step_info:
+                    # 绘制步数
+                    text_y += 40
+                    step_text = f"Step: {current_step_number}/{total_steps}"
+                    text_size, _ = cv2.getTextSize(step_text, font, font_scale, thickness)
+                    text_width, text_height = text_size
+                    # 绘制背景矩形
+                    cv2.rectangle(frame, (text_x - 10, text_y - text_height - 5), 
+                                (text_x + text_width + 10, text_y + 5), 
+                                background_color, -1)
+                    # 绘制文字
+                    cv2.putText(frame, step_text, (text_x, text_y), font, font_scale, text_color, thickness)
+                    
+                    # 绘制前腿信息
+                    text_y += 40
+                    leg_text = f"Front Leg: {current_step_info['front_leg']}"
+                    text_size, _ = cv2.getTextSize(leg_text, font, font_scale, thickness)
+                    text_width, text_height = text_size
+                    # 绘制背景矩形
+                    cv2.rectangle(frame, (text_x - 10, text_y - text_height - 5), 
+                                (text_x + text_width + 10, text_y + 5), 
+                                background_color, -1)
+                    # 绘制文字
+                    cv2.putText(frame, leg_text, (text_x, text_y), font, font_scale, text_color, thickness)
+                else:
+                    # 绘制步数
+                    text_y += 40
+                    step_text = f"Step:"
+                    text_size, _ = cv2.getTextSize(step_text, font, font_scale, thickness)
+                    text_width, text_height = text_size
+                    # 绘制背景矩形
+                    cv2.rectangle(frame, (text_x - 10, text_y - text_height - 5), 
+                                (text_x + text_width + 10, text_y + 5), 
+                                background_color, -1)
+                    # 绘制文字
+                    cv2.putText(frame, step_text, (text_x, text_y), font, font_scale, text_color, thickness)
+                    
+                    # 绘制前腿信息
+                    text_y += 40
+                    leg_text = f"Front Leg:"
+                    text_size, _ = cv2.getTextSize(leg_text, font, font_scale, thickness)
+                    text_width, text_height = text_size
+                    # 绘制背景矩形
+                    cv2.rectangle(frame, (text_x - 10, text_y - text_height - 5), 
+                                (text_x + text_width + 10, text_y + 5), 
+                                background_color, -1)
+                    # 绘制文字
+                    cv2.putText(frame, leg_text, (text_x, text_y), font, font_scale, text_color, thickness)
+
+
                 out.write(frame)
                 pbar_render.update(1)
                 # 每%10更新一次进度条
@@ -389,7 +480,8 @@ def main(action_id, input_video_file, out_video_file, out_json_file, out_warped_
         # 准备速度数据
         smoothed_speed = [{'time': t, 'right_speed': rs} for t, rs in zip(times, right_speed)]
         # 渲染参数到原始视频
-        render_parameters_to_video(mid_video_file, out_video_file, scaled_data, smoothed_speed)
+        render_parameters_to_video(mid_video_file, out_video_file, scaled_data, smoothed_speed, result, mirror_flag)
+        
         os.system(
             f"ffmpeg -i {out_video_file} -c:v libx264 -c:a aac {out_video_file.replace('.mp4', '_final.mp4')}")
         os.system(

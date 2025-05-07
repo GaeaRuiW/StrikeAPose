@@ -83,6 +83,10 @@ def smooth_data(data, window_size):
         # 计算右膝的平滑值
         smoothed_right_knee = [sum(d['right_knee'][0] for d in window) / len(window),
                               sum(d['right_knee'][1] for d in window) / len(window)]
+        smoothed_left_ankle_z = [sum(d['left_ankle_z'][0] for d in window) / len(window),
+                                 sum(d['left_ankle_z'][1] for d in window) / len(window)]
+        smoothed_right_ankle_z = [sum(d['right_ankle_z'][0] for d in window) / len(window),
+                                  sum(d['right_ankle_z'][1] for d in window) / len(window)]
         # 将平滑后的数据添加到列表中
         smoothed_data.append({
             'time': smoothed_time,
@@ -93,7 +97,9 @@ def smooth_data(data, window_size):
             'left_hip': smoothed_left_hip,
             'right_hip': smoothed_right_hip,
             'left_knee': smoothed_left_knee,
-            'right_knee': smoothed_right_knee
+            'right_knee': smoothed_right_knee,
+            'left_ankle_z': smoothed_left_ankle_z,
+            'right_ankle_z': smoothed_right_ankle_z
         })
     # 返回平滑后的数据
     return smoothed_data
@@ -282,7 +288,7 @@ def find_peaks_and_gait_points(times, left_speed, right_speed, smoothed_data, ou
     '''
     
     # 调用步态分析模块
-    result = gait_analysis.calculate_gait_parameters(left_points, right_points, smoothed_data, y_scale, z_x_scale, left_turn, right_turn)
+    result = gait_analysis.calculate_gait_parameters(left_points, right_points, smoothed_data, left_turn, right_turn)
     with open(out_file, 'w') as f:
         json.dump(result, f, indent=4, default=default_serializer)
     
@@ -338,7 +344,9 @@ def caculate_output(key_points4, datas, out_file, M, fps=24.0):
             'left_knee': [left_knee[0], left_knee[1]],
             'right_knee': [right_knee[0], right_knee[1]],
             'left_ankle': [left_ankle_transformed[0], left_ankle_transformed[1]],
-            'right_ankle': [right_ankle_transformed[0], right_ankle_transformed[1]]
+            'right_ankle': [right_ankle_transformed[0], right_ankle_transformed[1]],
+            'left_ankle_z': [left_ankle[0], left_ankle[1]],
+            'right_ankle_z': [right_ankle[0], right_ankle[1]]
         })
         left_x.append(left_ankle_transformed[0])
         left_y.append(left_ankle_transformed[1])
@@ -381,6 +389,14 @@ def caculate_output(key_points4, datas, out_file, M, fps=24.0):
             'right_knee': [
                 d['right_knee'][0] * z_x_scale,
                 d['right_knee'][1] * z_x_scale
+            ],
+            'left_ankle_z': [
+                d['left_ankle_z'][0] * z_x_scale,
+                d['left_ankle_z'][1] * z_x_scale
+            ],
+            'right_ankle_z': [
+                d['right_ankle_z'][0] * z_x_scale,
+                d['right_ankle_z'][1] * z_x_scale
             ]
         })
     # 计算速度

@@ -26,7 +26,7 @@ def calculate_angle(a, b, c):
     return angle_deg
 
 # 计算步态参数
-def calculate_gait_parameters(left_points, right_points, smoothed_data, y_scale, z_x_scale, left_turn, right_turn, fps=24.0):
+def calculate_gait_parameters(left_points, right_points, smoothed_data, left_turn, right_turn, fps=24.0):
     print(left_turn,right_turn)
     # 构造步骤列表
     left_steps = []
@@ -99,6 +99,7 @@ def calculate_gait_parameters(left_points, right_points, smoothed_data, y_scale,
     last_right_land_x = None  # 用于对侧步长计算
     steps_info = []
     prev_step_info = None  # 跟踪前一步的step_info
+    pre_step_length = None
 
     for i, step in enumerate(all_steps):
         leg = step['leg']
@@ -148,7 +149,14 @@ def calculate_gait_parameters(left_points, right_points, smoothed_data, y_scale,
             else:
                 step_length = 0
             last_right_land_x = land_x  # 更新右脚的着地点
-        
+
+        # 计算步长差
+        if pre_step_length is not None:
+            steps_diff = abs(step_length - pre_step_length)
+        else:
+            steps_diff = 0
+        pre_step_length = step_length
+
         # 计算步幅
         stride_length = abs(land_x - lift_x)
 
@@ -165,13 +173,16 @@ def calculate_gait_parameters(left_points, right_points, smoothed_data, y_scale,
         # 计算离地高度
         frames_in_step = [d for d in smoothed_data if start_time <= d['time'] <= end_time]
         if leg == 'left':
-            ankle_ys = [d['left_ankle'][1] for d in frames_in_step]
+            ankle_ys = [d['left_ankle_z'][1] for d in frames_in_step]
         else:
-            ankle_ys = [d['right_ankle'][1] for d in frames_in_step]
+            ankle_ys = [d['right_ankle_z'][1] for d in frames_in_step]
         if ankle_ys:
             max_y = max(ankle_ys)
             min_y = min(ankle_ys)
-            liftoff_height = (max_y - min_y) / y_scale * z_x_scale - 0.12  # 脚踝离地高度矫正
+            print ("ankle_ys:",ankle_ys)
+            print("max:",max_y)
+            print("min:",min_y)
+            liftoff_height = (max_y - min_y)
         else:
             liftoff_height = 0
         
@@ -209,17 +220,19 @@ def calculate_gait_parameters(left_points, right_points, smoothed_data, y_scale,
             'hip_min_degree': hip_min,
             'hip_max_degree': hip_max,
             'first_step': first_step,
-            'steps_diff': 0,
+            'steps_diff': steps_diff,
             'stride_length': stride_length
         }
 
+        '''
         # 如果存在前一步，计算并更新前一步的步长差
         if prev_step_info is not None:
             steps_diff = abs(current_step_length - prev_step_info['step_length'])
             prev_step_info['steps_diff'] = steps_diff
-
+        '''
         steps_info.append(step_info)
-        prev_step_info = step_info  # 更新前一步为当前步骤
+        # prev_step_info = step_info  # 更新前一步为当前步骤
+        
     
     # steps_info = steps_info[1:-1]
 

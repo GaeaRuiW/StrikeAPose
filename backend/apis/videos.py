@@ -225,7 +225,6 @@ def get_video(video_type: str, patient_id: int, video_id: int, session: SessionD
 
     video_path = video.video_path
     if not os.path.isfile(video_path):
-        # Log this inconsistency server-side
         print(f"Error: Database record found for video ID {video_id}, but file not found at {video_path}")
         raise HTTPException(status_code=404, detail="Video file not found on server.")
 
