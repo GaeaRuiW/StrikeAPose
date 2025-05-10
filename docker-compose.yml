@@ -20,6 +20,18 @@ services:
     volumes:
       - /data/pose/videos:/data/videos
       - ./backend:/app
+  admin_ui:
+    build:
+      context: ./admin-ui
+      dockerfile: Dockerfile
+    ports:
+      - "7000:3000"
+    depends_on:
+      - backend
+    container_name: pose-admin-ui
+    networks:
+      - strike
+    restart: always
   queue:
     build:
       context: .

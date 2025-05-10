@@ -62,6 +62,10 @@ async def create_action(action: CreateAction = Body(...), session: SessionDep = 
                                             VideoPath.patient_id == action.patient_id, VideoPath.original_video == True, VideoPath.is_deleted == False).first()
     if not video:
         return {"message": "Video not found"}
+    parent_id_exists = session.query(Action).filter(
+        Action.id == action.parent_id, Action.is_deleted == False).first()
+    if action.parent_id and not parent_id_exists:
+        return {"message": "Parent action not found"}
     new_action = Action(patient_id=action.patient_id,
                         video_id=action.video_id, status="waiting", progress="waiting for processing", is_deleted=False, create_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"), update_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                         parent_id=action.parent_id if action.parent_id else None)

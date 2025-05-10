@@ -1,0 +1,110 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* CoreUI Inspired Palette - Light Theme for Content, Dark for Sidebar */
+    --background: 0 0% 98%; /* Very light grey / White for main content area */
+    --foreground: 220 12% 20%; /* Dark Grey/Black for text */
+
+    --card: 0 0% 100%; /* White cards */
+    --card-foreground: 220 12% 20%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 12% 20%;
+
+    --primary: 229 53% 48%; /* CoreUI Indigo/Blue - e.g. #3345a3 */
+    --primary-foreground: 0 0% 100%; /* White text on primary */
+
+    --secondary: 220 13% 91%; /* Lighter Grey for secondary elements */
+    --secondary-foreground: 220 12% 20%;
+
+    --muted: 220 13% 88%; /* Muted Grey */
+    --muted-foreground: 220 9% 45%;
+
+    --accent: 39 94% 58%; /* CoreUI Yellow/Orange accent - e.g. #f9b115 */
+    --accent-foreground: 220 12% 20%; /* Dark text on accent */
+
+    --destructive: 0 72% 51%; /* Red for destructive actions - e.g. #e55353 */
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 220 13% 85%; /* Light Grey border, consistent with CoreUI */
+    --input: 0 0% 100%; /* White input background */
+    --ring: 229 53% 58%; /* Ring color related to primary */
+
+    --chart-1: 229 53% 48%; /* Primary for charts */
+    --chart-2: 39 94% 58%; /* Accent for charts */
+    --chart-3: 210 17% 60%; /* Muted gray for charts */
+    --chart-4: 25 80% 55%;
+    --chart-5: 195 75% 50%;
+    
+    --radius: 0.375rem; /* CoreUI often uses slightly less rounded corners */
+
+    /* Sidebar specific colors - CoreUI Dark Sidebar Inspired */
+    --sidebar-background: 225 22% 22%; /* Dark Slate Blue/Grey - e.g. #2a2f32 or CoreUI's #3c4b64 */
+    --sidebar-foreground: 0 0% 85%; /* Light text for dark sidebar */
+    --sidebar-primary: 229 53% 58%; /* Lighter blue for active/hover on dark sidebar */
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 225 22% 28%; /* Slightly lighter dark slate for hover */
+    --sidebar-accent-foreground: 0 0% 98%;
+    --sidebar-border: 225 22% 18%; /* Border for sidebar elements if needed */
+    --sidebar-ring: 229 53% 58%;
+  }
+
+  .dark {
+    /* Dark Theme - Keeping sidebar dark, content area becomes dark */
+    --background: 220 12% 10%; /* Dark background for content */
+    --foreground: 0 0% 95%; /* Light text for content */
+
+    --card: 220 12% 15%; /* Darker cards */
+    --card-foreground: 0 0% 95%;
+
+    --popover: 220 12% 15%;
+    --popover-foreground: 0 0% 95%;
+
+    --primary: 229 53% 58%; /* Primary blue, slightly adjusted for dark */
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 220 12% 20%;
+    --secondary-foreground: 0 0% 95%;
+
+    --muted: 220 12% 25%;
+    --muted-foreground: 220 9% 65%;
+
+    --accent: 39 94% 62%; /* Accent yellow/orange, adjusted for dark */
+    --accent-foreground: 220 12% 10%;
+
+    --destructive: 0 70% 55%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 220 12% 25%;
+    --input: 220 12% 20%;
+    --ring: 229 53% 58%;
+
+    --chart-1: 229 53% 58%;
+    --chart-2: 39 94% 62%;
+    --chart-3: 210 17% 50%;
+    --chart-4: 280 65% 60%;
+    --chart-5: 340 75% 55%;
+
+    /* Dark Sidebar specific colors (can be same as light if sidebar is always dark) */
+    --sidebar-background: 225 22% 22%;
+    --sidebar-foreground: 0 0% 85%;
+    --sidebar-primary: 229 53% 58%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 225 22% 28%;
+    --sidebar-accent-foreground: 0 0% 98%;
+    --sidebar-border: 225 22% 18%;
+    --sidebar-ring: 229 53% 58%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}

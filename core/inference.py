@@ -486,6 +486,7 @@ def main(action_id, input_video_file, out_video_file, out_json_file, out_warped_
             f"ffmpeg -i {out_video_file} -c:v libx264 -c:a aac {out_video_file.replace('.mp4', '_final.mp4')}")
         os.system(
             f"mv -f {out_video_file.replace('.mp4', '_final.mp4')} {out_video_file}")
+        print(result)
         return result
 
 if __name__ == "__main__":

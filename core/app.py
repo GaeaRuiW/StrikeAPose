@@ -1,9 +1,11 @@
 import os
 import warnings
 from threading import Thread
+import traceback
 
 import cv2
 import requests
+import numpy as np
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -16,7 +18,7 @@ backend_host = os.getenv("BACKEND_HOST", "127.0.0.1")
 update_action_url = f"http://{backend_host}:8000/api/v1/actions/update_action"
 update_action_status_url = f"http://{backend_host}:8000/api/v1/actions/update_action_status"
 insert_inference_video_url = f"http://{backend_host}:8000/api/v1/videos/insert_inference_video"
-update_progewss_url = f"http://{backend_host}:8000/api/v1/actions/update_action_progress"
+update_progress_url = f"http://{backend_host}:8000/api/v1/actions/update_action_progress"
 
 def flip_video(video_path):
     print("flipping video")
@@ -48,6 +50,21 @@ def flip_video(video_path):
     cv2.destroyAllWindows()
     print("video flipped")
     return video_path.replace('original', 'flipped')
+
+def convert_to_serializable(obj):
+    """递归地将对象中的 NumPy 数据类型转换为 Python 原生类型"""
+    if isinstance(obj, dict):
+        return {key: convert_to_serializable(value) for key, value in obj.items()}
+    elif isinstance(obj, list):
+        return [convert_to_serializable(item) for item in obj]
+    elif isinstance(obj, np.ndarray):
+        return obj.tolist()
+    elif isinstance(obj, (np.float32, np.float64)):
+        return float(obj)
+    elif isinstance(obj, (np.int32, np.int64)):
+        return int(obj)
+    else:
+        return obj
 
 class InferenceRequest(BaseModel):
     action_id: int
@@ -88,23 +105,26 @@ async def inference_api(inference_request: InferenceRequest):
             # flipped_video_path = flip_video(video_path)
             result = inference(action_id, video_path, output_video_path, output_json_path)
             if result is not None:
+                # 确保 result 中的数据可序列化
+                serializable_result = convert_to_serializable(result)
                 data = {
                     "action_id": action_id,
-                    "data": result
+                    "data": serializable_result
                 }
-                print(result)
+                print(serializable_result)
                 requests.put(update_action_url, json=data)
                 requests.post(f"{insert_inference_video_url}/{action_id}")
                 requests.post(update_action_status_url, json={"action_id": action_id, "status": "success", "action": action})
-                requests.post(update_progewss_url, json={"action_id": action_id, "progress": ""})
+                requests.post(update_progress_url, json={"action_id": action_id, "progress": ""})
             else:
                 print('No result! please check the csv and log file.')
                 requests.post(update_action_status_url, json={"action_id": action_id, "status": "failed: no result", "action": action})
-                requests.post(update_progewss_url, json={"action_id": action_id, "progress": ""})
+                requests.post(update_progress_url, json={"action_id": action_id, "progress": ""})
         except Exception as e:
+            traceback.print_exc()
             print(e)
             requests.post(update_action_status_url, json={"action_id": action_id, "status": f"failed: {str(e)}", "action": action})
-            requests.post(update_progewss_url, json={"action_id": action_id, "progress": ""})
+            requests.post(update_progress_url, json={"action_id": action_id, "progress": ""})
 
     thread = Thread(target=inference_thread)
     thread.start()

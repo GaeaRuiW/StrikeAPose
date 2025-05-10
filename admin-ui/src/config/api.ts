@@ -1,0 +1,1 @@
+export const API_BASE_URL = typeof window !== 'undefined' ? window.location.origin.replace(/:\d+/, ':8000') + '/api/v1' : 'http://localhost:8000/api/v1'; 
