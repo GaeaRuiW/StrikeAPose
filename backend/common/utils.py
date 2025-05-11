@@ -38,7 +38,7 @@ def calculate_stats(data: list[float | int | None]) -> tuple[float, float]:
     else:
         std_dev = statistics.stdev(filtered_data)
 
-    return round(average, 2), round(std_dev, 2)
+    return round(average, 4), round(std_dev, 4)
 
 
 def generate_thumbnail(video_path: str, thumbnail_path: str, time: int = 1):
