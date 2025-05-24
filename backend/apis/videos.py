@@ -1,13 +1,13 @@
 import os
-import uuid
 import shutil
 import tempfile
+import uuid
 from datetime import datetime
 
 from common.utils import convert_to_mp4, generate_thumbnail
 from config import video_dir
-from fastapi import APIRouter, Body, File, Request, UploadFile, HTTPException
-from fastapi.responses import StreamingResponse, FileResponse
+from fastapi import APIRouter, Body, File, HTTPException, Request, UploadFile
+from fastapi.responses import FileResponse, StreamingResponse
 from models import (Action, Doctors, Patients, SessionDep, Stage, StepsInfo,
                     VideoPath)
 from pydantic import BaseModel
@@ -20,6 +20,13 @@ class DeleteVideo(BaseModel):
     video_id: int
     doctor_id: int
     patient_id: int
+
+
+class UpdateNotes(BaseModel):
+    video_id: int
+    doctor_id: int
+    patient_id: int
+    notes: str
 
 
 @router.delete("/delete_video")
@@ -40,44 +47,44 @@ def delete_video(video: DeleteVideo = Body(...), session: SessionDep = SessionDe
         return {"message": "Video not found"}
     action_id = video_.action_id
     if not action_id:
-        session.delete(video_)
+        # session.delete(video_)
+        video_.is_deleted = True
         session.commit()
         return {"message": "Video deleted successfully"}
     all_videos = session.query(VideoPath).filter(
         VideoPath.action_id == action_id, VideoPath.is_deleted == False).all()
     for video_ in all_videos:
-        video_path = video_.video_path
-        if os.path.exists(video_path):
-            print(f"Deleting video: {video_path}")
-            os.remove(video_path)
-        if os.path.exists(video_path.replace("mp4", "json")):
-            print(f"Deleting json: {video_path.replace('mp4', 'json')}")
-            os.remove(video_path.replace("mp4", "json"))
-        session.delete(video_)
+        # video_path = video_.video_path
+        # if os.path.exists(video_path):
+        #     print(f"Deleting video: {video_path}")
+        #     os.remove(video_path)
+        # if os.path.exists(video_path.replace("mp4", "json")):
+        #     print(f"Deleting json: {video_path.replace('mp4', 'json')}")
+        #     os.remove(video_path.replace("mp4", "json"))
+        # session.delete(video_)
+        video_.is_deleted = True
 
     all_actions = session.query(Action).filter(
-        Action.id == action_id, Action.is_deleted == False).all()
+        Action.video_id == video_.id, Action.is_deleted == False).all()
     all_parent_actions = session.query(Action).filter(
         Action.parent_id == action_id, Action.is_deleted == False).all()
     all_actions.extend(all_parent_actions)
-    if not all_actions:
-        session.commit()
-        return {"message": "Video deleted successfully"}
     for action_ in all_actions:
         all_stages = session.query(Stage).filter(
             Stage.action_id == action_id, Stage.is_deleted == False).all()
-        if not all_stages:
-            session.commit()
-            return {"message": "Video deleted successfully"}
         for stage_ in all_stages:
             steps = session.query(StepsInfo).filter(
                 StepsInfo.stage_id == stage_.id, StepsInfo.is_deleted == False).all()
             if not steps:
                 pass
             for step in steps:
-                session.delete(step)
-            session.delete(stage_)
-        session.delete(action_)
+                step.is_deleted = True
+            stage_.is_deleted = True
+        action_.is_deleted = True
+
+        #         session.delete(step)
+        #     session.delete(stage_)
+        # session.delete(action_)
     session.commit()
 
     return {"message": "Video deleted successfully"}
@@ -175,6 +182,7 @@ async def upload_video(patient_id: int, video: UploadFile = File(...), session: 
             original_video=True,
             inference_video=False,
             is_deleted=False,
+            notes="步态分析",
             create_time=current_time,
             update_time=current_time
         )
@@ -225,8 +233,10 @@ def get_video(video_type: str, patient_id: int, video_id: int, session: SessionD
 
     video_path = video.video_path
     if not os.path.isfile(video_path):
-        print(f"Error: Database record found for video ID {video_id}, but file not found at {video_path}")
-        raise HTTPException(status_code=404, detail="Video file not found on server.")
+        print(
+            f"Error: Database record found for video ID {video_id}, but file not found at {video_path}")
+        raise HTTPException(
+            status_code=404, detail="Video file not found on server.")
 
     return FileResponse(
         path=video_path,
@@ -338,8 +348,29 @@ def insert_inference_video(action_id: int, session: SessionDep = SessionDep):
     if not video:
         return {"message": "Video not found"}
     new_video_path = video.video_path.replace("original", "inference")
-    new_video = VideoPath(video_path=new_video_path, patient_id=video.patient_id, original_video=False, inference_video=True, is_deleted=False, action_id=action_id,
+    new_video = VideoPath(video_path=new_video_path, patient_id=video.patient_id, original_video=False, inference_video=True, is_deleted=False, action_id=action_id, notes=None,
                           create_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"), update_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
     session.add(new_video)
     session.commit()
     return {"message": "Inference video inserted successfully", "video_id": new_video.id}
+
+
+@router.patch("/notes")
+def update_video_notes(params: UpdateNotes = Body(...), session: SessionDep = SessionDep):
+    doctor = session.query(Doctors).filter(
+        Doctors.id == params.doctor_id, Doctors.is_deleted == False).first()
+    if not doctor:
+        return {"message": "Doctor not found"}
+    if doctor.role_id != 1:
+        video_ = session.query(VideoPath).filter(VideoPath.id == params.video_id,
+                                                 VideoPath.is_deleted == False).first()
+        if not video_:
+            return {"message": "Video not found or this doctor does not have permission to update this video"}
+    else:
+        video_ = session.query(VideoPath).filter(VideoPath.id == params.video_id,
+                                                 VideoPath.is_deleted == False, VideoPath.patient_id == params.patient_id).first()
+    if not video_:
+        return {"message": "Video not found"}
+    video_.notes = params.notes
+    session.commit()
+    return {"message": "update notes successfully"}
