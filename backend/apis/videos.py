@@ -75,16 +75,14 @@ def delete_video(video: DeleteVideo = Body(...), session: SessionDep = SessionDe
         for stage_ in all_stages:
             steps = session.query(StepsInfo).filter(
                 StepsInfo.stage_id == stage_.id, StepsInfo.is_deleted == False).all()
-            if not steps:
-                pass
             for step in steps:
                 step.is_deleted = True
             stage_.is_deleted = True
         action_.is_deleted = True
 
-        #         session.delete(step)
-        #     session.delete(stage_)
-        # session.delete(action_)
+            #         session.delete(step)
+            #     session.delete(stage_)
+            # session.delete(action_)
     session.commit()
 
     return {"message": "Video deleted successfully"}

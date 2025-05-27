@@ -3,7 +3,7 @@ from typing import Optional
 from sqlalchemy import desc, asc
 
 from fastapi import APIRouter, Body, Query
-from models import Doctors, Patients, SessionDep
+from models import Doctors, Patients, SessionDep, VideoPath
 from pydantic import BaseModel
 
 router = APIRouter(tags=["patients"], prefix="/patients")
@@ -24,6 +24,7 @@ class UpdatePatientModel(BaseModel):
     doctor_id: int
     patient_id: int
     username: str
+
 
 class PatientLoginModel(BaseModel):
     case_id: str
@@ -71,6 +72,38 @@ def get_all_patient_by_doctor_id(doctor_id: int, session: SessionDep = SessionDe
     return [patient.to_dict() for patient in patients]
 
 
+@router.get("/get_last_upload_video_patient/{doctor_id}")
+def get_last_upload_video_patient(doctor_id: int, session: SessionDep = SessionDep):
+    doctor = session.query(Doctors).filter(Doctors.id == doctor_id).first()
+    if not doctor:
+        return {"message": "Doctor not found"}
+    if doctor.role_id != 1:
+        patients = session.query(Patients).filter(
+            Patients.doctor_id == doctor_id, Patients.is_deleted == False).all()
+    else:
+        patients = session.query(Patients).filter(
+            Patients.is_deleted == False).all()
+    patient_videos = []
+    for patient in patients:
+        if (
+            last_patient_video := session.query(VideoPath)
+            .filter(
+                VideoPath.patient_id == patient.id,
+                VideoPath.is_deleted == False,
+                VideoPath.original_video == True,
+            )
+            .order_by(VideoPath.create_time.desc())
+            .first()
+        ):
+            patient_videos.append(last_patient_video.to_dict())
+    if patient_videos:
+        patient_videos = sorted(
+            patient_videos, key=lambda x: x["create_time"], reverse=True)
+        return {"patient_id": patient_videos[0]["patient_id"], "video_id": patient_videos[0]["id"], "message": "success"}
+    else:
+        return {"message": "No video found", "patient_id": None, "video_id": None}
+
+
 @router.put("/update_patient_by_id")
 def update_patient_by_id(patient: UpdatePatientModel = Body(..., embed=True), session: SessionDep = SessionDep):
     doctor = session.query(Doctors).filter(
@@ -79,9 +112,10 @@ def update_patient_by_id(patient: UpdatePatientModel = Body(..., embed=True), se
         return {"message": "Doctor not found"}
     if doctor.role_id != 1:
         patient_ = session.query(Patients).filter(Patients.id == patient.patient_id,
-                                                 Patients.doctor_id == patient.doctor_id, Patients.is_deleted == False).first()
+                                                  Patients.doctor_id == patient.doctor_id, Patients.is_deleted == False).first()
     else:
-        patient_ = session.query(Patients).filter(Patients.id == patient.patient_id, Patients.is_deleted == False).first()
+        patient_ = session.query(Patients).filter(
+            Patients.id == patient.patient_id, Patients.is_deleted == False).first()
     if not patient_:
         return {"message": "Patient not found or this doctor does not have permission to update this patient"}
     patient_.age = patient.age

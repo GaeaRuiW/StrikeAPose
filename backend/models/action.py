@@ -6,7 +6,8 @@ from sqlmodel import Field, SQLModel
 class Action(SQLModel, table=True):
     id: int = Field(primary_key=True)
     parent_id: int = Field(default=None, foreign_key="action.id", nullable=True)
-    video_id: int
+    original_video_id: int
+    inference_video_id: int = Field(default=None, nullable=True)
     patient_id: int
     status: str
     progress: str
@@ -14,8 +15,7 @@ class Action(SQLModel, table=True):
     update_time: str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     is_deleted: bool
 
-    def __init__(self, video_id: int, patient_id: int, status: str, progress: str, create_time: str, update_time: str, is_deleted: bool, parent_id: int = None):
-        self.video_id = video_id
+    def __init__(self, patient_id: int, status: str, progress: str, create_time: str, update_time: str, is_deleted: bool, parent_id: int = None, original_video_id: int = None, inference_video_id: int = None):
         self.patient_id = patient_id
         self.status = status
         self.progress = progress
@@ -23,11 +23,14 @@ class Action(SQLModel, table=True):
         self.update_time = update_time
         self.is_deleted = is_deleted
         self.parent_id = parent_id
+        self.original_video_id = original_video_id
+        self.inference_video_id = inference_video_id
 
     def to_dict(self):
         return {
             "id": self.id,
-            "video_id": self.video_id,
+            "original_video_id": self.original_video_id,
+            "inference_video_id": self.inference_video_id,
             "patient_id": self.patient_id,
             "status": self.status,
             "progress": self.progress,

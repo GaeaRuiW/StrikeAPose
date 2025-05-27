@@ -107,13 +107,15 @@ async def inference_api(inference_request: InferenceRequest):
             if result is not None:
                 # 确保 result 中的数据可序列化
                 serializable_result = convert_to_serializable(result)
+                res = requests.post(f"{insert_inference_video_url}/{action_id}")
+                inference_video_id = res.json()["video_id"]
                 data = {
                     "action_id": action_id,
-                    "data": serializable_result
+                    "data": serializable_result,
+                    "inference_video_id": inference_video_id
                 }
                 print(serializable_result)
                 requests.put(update_action_url, json=data)
-                requests.post(f"{insert_inference_video_url}/{action_id}")
                 requests.post(update_action_status_url, json={"action_id": action_id, "status": "success", "action": action})
                 requests.post(update_progress_url, json={"action_id": action_id, "progress": ""})
             else:

@@ -38,6 +38,7 @@ class UpdateActionData(BaseModel):
 
 class UpdateAction(BaseModel):
     action_id: int
+    inference_video_id: Optional[int] = None
     data: Optional[List[UpdateActionData]]
 
 
@@ -67,7 +68,7 @@ async def create_action(action: CreateAction = Body(...), session: SessionDep = 
     if action.parent_id and not parent_id_exists:
         return {"message": "Parent action not found"}
     new_action = Action(patient_id=action.patient_id,
-                        video_id=action.video_id, status="waiting", progress="waiting for processing", is_deleted=False, create_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"), update_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                        original_video_id=action.video_id, status="waiting", progress="waiting for processing", is_deleted=False, create_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"), update_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                         parent_id=action.parent_id or None)
     session.add(new_action)
     session.commit()
@@ -161,9 +162,9 @@ async def delete_action(action_id: int, session: SessionDep = SessionDep):
     #         step_info.update_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     session.commit()
     redis_conn.lrem("waiting_actions", 0,
-                    f"{action.patient_id}-{action_id}-{action.video_id}")
+                    f"{action.patient_id}-{action_id}-{action.original_video_id}")
     redis_conn.lrem("running_actions", 0,
-                    f"{action.patient_id}-{action_id}-{action.video_id}")
+                    f"{action.patient_id}-{action_id}-{action.original_video_id}")
     return {"message": "Action deleted successfully"}
 
 
@@ -173,6 +174,10 @@ async def update_action(data: UpdateAction = Body(...), session: SessionDep = Se
         Action.id == data.action_id, Action.is_deleted == False).first()
     if not action:
         return {"message": "Action not found"}
+    if data.inference_video_id:
+        action.inference_video_id = data.inference_video_id
+        action.update_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        session.commit()
     for stage_data in sorted(data.data, key=lambda x: x.stage_n):
         stage = Stage(action_id=data.action_id, stage_n=stage_data.stage_n,
                       start_frame=stage_data.start_frame, end_frame=stage_data.end_frame, is_deleted=False, create_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"), update_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))

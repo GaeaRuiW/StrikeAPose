@@ -595,7 +595,7 @@ def get_actions_management(admin_doctor_id: int = Query(...),
     ).join(
         Patients, Action.patient_id == Patients.id, isouter=True
     ).join(
-        VideoPath, Action.video_id == VideoPath.id, isouter=True # video_id in Action refers to original video
+        VideoPath, Action.original_video_id == VideoPath.id, isouter=True # video_id in Action refers to original video
     ).filter(
         Action.is_deleted == False
     ).order_by(Action.create_time.desc()).all()
@@ -653,7 +653,7 @@ def delete_video_management(video_del_data: DeleteVideo, session: SessionDep = S
         # Soft delete related actions if this video is an original video
         if video_db.original_video:
             actions = session.query(Action).filter(
-                Action.video_id == video_db.id, Action.is_deleted == False).all()
+                Action.original_video_id == video_db.id, Action.is_deleted == False).all()
             for action in actions:
                 action.is_deleted = True
                 action.update_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -678,7 +678,7 @@ def delete_video_management(video_del_data: DeleteVideo, session: SessionDep = S
     else: # Hard delete
         # If it's an original video, delete its actions, stages, steps, and inference videos
         if video_db.original_video:
-            actions = session.query(Action).filter(Action.video_id == video_del_data.video_id).all()
+            actions = session.query(Action).filter(Action.original_video_id == video_del_data.video_id).all()
             for action in actions:
                 # Delete inference videos for this action
                 session.query(VideoPath).filter(VideoPath.action_id == action.id, VideoPath.inference_video == True).delete(synchronize_session=False)
