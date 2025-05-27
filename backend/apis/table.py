@@ -2,7 +2,7 @@ from common.utils import calculate_stats
 from fastapi import APIRouter
 from models import SessionDep, Stage, StepsInfo
 
-router = APIRouter(tags=["table"], prefix="/table")
+router = APIRouter(tags=["tables"], prefix="/table")
 
 
 @router.get("/step_hip_degree/{action_id}")

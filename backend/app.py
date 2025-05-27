@@ -21,7 +21,7 @@ app.include_router(dashboard_router, prefix="/api/v1", tags=["dashboard"])
 app.include_router(doctor_router, prefix="/api/v1", tags=["doctors"])
 app.include_router(patient_router, prefix="/api/v1", tags=["patients"])
 app.include_router(video_router, prefix="/api/v1", tags=["videos"])
-# app.include_router(table_router, prefix="/api/v1", tags=["tables"])
+app.include_router(table_router, prefix="/api/v1", tags=["tables"])
 app.include_router(management_router, prefix="/api/v1", tags=["management"])
 
 origins = ["*"]
