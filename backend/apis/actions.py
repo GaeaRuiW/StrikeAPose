@@ -68,7 +68,7 @@ async def create_action(action: CreateAction = Body(...), session: SessionDep = 
         return {"message": "Parent action not found"}
     new_action = Action(patient_id=action.patient_id,
                         video_id=action.video_id, status="waiting", progress="waiting for processing", is_deleted=False, create_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"), update_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                        parent_id=action.parent_id if action.parent_id else None)
+                        parent_id=action.parent_id or None)
     session.add(new_action)
     session.commit()
     action_id = new_action.id
@@ -76,7 +76,7 @@ async def create_action(action: CreateAction = Body(...), session: SessionDep = 
         Action.id == action_id, Action.is_deleted == False).first()
     if not action_:
         return {"message": "Action not found"}
-    action_.parent_id = action.parent_id if action.parent_id else action_id
+    action_.parent_id = action.parent_id or action_id
     session.commit()
     redis_client = get_redis_connection()
     redis_client.rpush("waiting_actions",
@@ -100,11 +100,14 @@ async def get_actions(patient_id: int, session: SessionDep = SessionDep):
 
 @router.get("/get_action_by_id/{action_id}")
 async def get_action_by_id(action_id: int, session: SessionDep = SessionDep):
-    action = session.query(Action).filter(
-        Action.id == action_id, Action.is_deleted == False).first()
-    if not action:
+    if (
+        action := session.query(Action)
+        .filter(Action.id == action_id, Action.is_deleted == False)
+        .first()
+    ):
+        return {"action": action.to_dict()}
+    else:
         return {"message": "Action not found"}
-    return {"action": action.to_dict()}
 
 
 @router.get("/get_action_by_parent_id/{parent_id}")

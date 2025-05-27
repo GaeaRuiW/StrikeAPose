@@ -32,13 +32,20 @@ class PatientLoginModel(BaseModel):
 
 @router.post("/patient_login")
 def patient_login(patient: PatientLoginModel = Body(..., embed=True), session: SessionDep = SessionDep):
-    patient_ = session.query(Patients).filter(
-        Patients.case_id == patient.case_id, Patients.is_deleted == False).first()
-    if not patient_:
+    if (
+        patient_ := session.query(Patients)
+        .filter(
+            Patients.case_id == patient.case_id, Patients.is_deleted == False
+        )
+        .first()
+    ):
+        return (
+            {"message": "Case ID verification failed"}
+            if patient_.case_id != patient.verify_case_id
+            else {"message": "Login successful", "patient": patient_.to_dict()}
+        )
+    else:
         return {"message": "Patient not found"}
-    if patient_.case_id != patient.verify_case_id:
-        return {"message": "Case ID verification failed"}
-    return {"message": "Login successful", "patient": patient_.to_dict()}
 
 
 @router.put("/insert_patient")
@@ -73,12 +80,10 @@ def update_patient_by_id(patient: UpdatePatientModel = Body(..., embed=True), se
     if doctor.role_id != 1:
         patient_ = session.query(Patients).filter(Patients.id == patient.patient_id,
                                                  Patients.doctor_id == patient.doctor_id, Patients.is_deleted == False).first()
-        if not patient_:
-            return {"message": "Patient not found or this doctor does not have permission to update this patient"}
     else:
         patient_ = session.query(Patients).filter(Patients.id == patient.patient_id, Patients.is_deleted == False).first()
-        if not patient_:
-            return {"message": "Patient not found or this doctor does not have permission to update this patient"}
+    if not patient_:
+        return {"message": "Patient not found or this doctor does not have permission to update this patient"}
     patient_.age = patient.age
     patient_.gender = patient.gender
     patient_.case_id = patient.case_id

@@ -106,7 +106,7 @@ async def upload_video(patient_id: int, video: UploadFile = File(...), session: 
     # More robust format check (still relies on filename)
     supported_formats = ('.avi', '.mov', '.wmv', '.mkv', '.flv', '.mp4v', '.m4v', '.rmvb',
                          '.webm', '.mpeg', '.mpg', '.ts', '.vob', '.mp4')
-    original_filename = video.filename if video.filename else "unknown_video"
+    original_filename = video.filename or "unknown_video"
     file_ext = os.path.splitext(original_filename)[1].lower()
 
     if not file_ext:
@@ -196,13 +196,12 @@ async def upload_video(patient_id: int, video: UploadFile = File(...), session: 
         # If an HTTPException was raised earlier, re-raise it
         raise http_exc
     except Exception as e:
-        # Catch any other unexpected errors during processing
         print(f"ERROR during video upload processing: {e}")
         import traceback
-        traceback.print_exc()  # Log the full traceback for debugging
-        # Return a generic server error
+        traceback.print_exc()
         raise HTTPException(
-            status_code=500, detail=f"An internal error occurred: {e}")
+            status_code=500, detail=f"An internal error occurred: {e}"
+        ) from e
     finally:
         # --- Cleanup: Ensure temporary file is deleted if something went wrong ---
         if temp_file_path and os.path.exists(temp_file_path):

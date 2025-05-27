@@ -140,10 +140,8 @@ def authorize_admin(admin_doctor_id: int, session: SessionDep):
 @router.post("/login")
 def login(login_data: Login, session: SessionDep = SessionDep):
     doctor = session.query(Doctors).filter(
-        Doctors.email == login_data.email, Doctors.is_deleted == False).first()
-    if not doctor:
-        doctor = session.query(Doctors).filter(
-            Doctors.username == login_data.email, Doctors.is_deleted == False).first()
+            Doctors.email == login_data.email, Doctors.is_deleted == False).first() or session.query(Doctors).filter(
+                Doctors.username == login_data.email, Doctors.is_deleted == False).first()
 
     if not doctor or not check_password(login_data.password, doctor.password):
         raise HTTPException(
@@ -184,13 +182,22 @@ def get_doctors(admin_doctor_id: int = Query(...), session: SessionDep = Session
 async def create_doctor_management(doctor_data: CreateDoctorManagement, session: SessionDep = SessionDep):
     authorize_admin(doctor_data.admin_doctor_id, session)
 
-    existing_doctor_username = session.query(Doctors).filter(
-        Doctors.username == doctor_data.username, Doctors.is_deleted == False).first()
-    if existing_doctor_username:
+    if (
+        existing_doctor_username := session.query(Doctors)
+        .filter(
+            Doctors.username == doctor_data.username,
+            Doctors.is_deleted == False,
+        )
+        .first()
+    ):
         raise HTTPException(status_code=400, detail="Username already exists")
-    existing_doctor_email = session.query(Doctors).filter(
-        Doctors.email == doctor_data.email, Doctors.is_deleted == False).first()
-    if existing_doctor_email:
+    if (
+        existing_doctor_email := session.query(Doctors)
+        .filter(
+            Doctors.email == doctor_data.email, Doctors.is_deleted == False
+        )
+        .first()
+    ):
         raise HTTPException(status_code=400, detail="Email already exists")
 
     new_doctor = Doctors(
@@ -226,17 +233,29 @@ def update_doctor(doctor_update_data: UpdateDoctor, session: SessionDep = Sessio
         raise HTTPException(status_code=404, detail="Doctor not found")
 
     if doctor_update_data.username and doctor_update_data.username != doctor_db.username:
-        existing_doctor_username = session.query(Doctors).filter(
-            Doctors.username == doctor_update_data.username, Doctors.id != doctor_db.id, Doctors.is_deleted == False).first()
-        if existing_doctor_username:
+        if (
+            existing_doctor_username := session.query(Doctors)
+            .filter(
+                Doctors.username == doctor_update_data.username,
+                Doctors.id != doctor_db.id,
+                Doctors.is_deleted == False,
+            )
+            .first()
+        ):
             raise HTTPException(
                 status_code=400, detail="Username already taken by another doctor.")
         doctor_db.username = doctor_update_data.username
 
     if doctor_update_data.email and doctor_update_data.email != doctor_db.email:
-        existing_doctor_email = session.query(Doctors).filter(
-            Doctors.email == doctor_update_data.email, Doctors.id != doctor_db.id, Doctors.is_deleted == False).first()
-        if existing_doctor_email:
+        if (
+            existing_doctor_email := session.query(Doctors)
+            .filter(
+                Doctors.email == doctor_update_data.email,
+                Doctors.id != doctor_db.id,
+                Doctors.is_deleted == False,
+            )
+            .first()
+        ):
             raise HTTPException(
                 status_code=400, detail="Email already taken by another doctor.")
         doctor_db.email = doctor_update_data.email
@@ -311,9 +330,14 @@ def get_patients(admin_doctor_id: int = Query(...), session: SessionDep = Sessio
         pat_dict = patient.to_dict()
         doctor_username = "N/A"
         if patient.doctor_id:
-            doctor = session.query(Doctors.username).filter(
-                Doctors.id == patient.doctor_id, Doctors.is_deleted == False).scalar()
-            if doctor:
+            if (
+                doctor := session.query(Doctors.username)
+                .filter(
+                    Doctors.id == patient.doctor_id,
+                    Doctors.is_deleted == False,
+                )
+                .scalar()
+            ):
                 doctor_username = doctor
         pat_dict["attendingDoctorName"] = doctor_username
 
@@ -329,20 +353,31 @@ def get_patients(admin_doctor_id: int = Query(...), session: SessionDep = Sessio
 async def create_patient_management(patient_data: CreatePatientManagement, session: SessionDep = SessionDep):
     authorize_admin(patient_data.admin_doctor_id, session)
 
-    existing_patient = session.query(Patients).filter(
-        Patients.case_id == patient_data.case_id, Patients.is_deleted == False).first()
-    if existing_patient:
+    if (
+        existing_patient := session.query(Patients)
+        .filter(
+            Patients.case_id == patient_data.case_id,
+            Patients.is_deleted == False,
+        )
+        .first()
+    ):
         raise HTTPException(status_code=400, detail="Case ID already exists")
 
     assigned_doctor_username = "N/A"
     if patient_data.doctor_id:
-        assigned_doctor = session.query(Doctors).filter(
-            Doctors.id == patient_data.doctor_id, Doctors.is_deleted == False).first()
-        if not assigned_doctor:
+        if (
+            assigned_doctor := session.query(Doctors)
+            .filter(
+                Doctors.id == patient_data.doctor_id,
+                Doctors.is_deleted == False,
+            )
+            .first()
+        ):
+            assigned_doctor_username = assigned_doctor.username
+
+        else:
             raise HTTPException(
                 status_code=404, detail="Assigned doctor not found")
-        assigned_doctor_username = assigned_doctor.username
-
     new_patient = Patients(
         username=patient_data.username,
         age=patient_data.age,
@@ -382,9 +417,15 @@ def update_patient(patient_update_data: UpdatePatient, session: SessionDep = Ses
         patient_db.gender = patient_update_data.gender
 
     if patient_update_data.case_id and patient_update_data.case_id != patient_db.case_id:
-        existing_patient_case_id = session.query(Patients).filter(
-            Patients.case_id == patient_update_data.case_id, Patients.id != patient_db.id, Patients.is_deleted == False).first()
-        if existing_patient_case_id:
+        if (
+            existing_patient_case_id := session.query(Patients)
+            .filter(
+                Patients.case_id == patient_update_data.case_id,
+                Patients.id != patient_db.id,
+                Patients.is_deleted == False,
+            )
+            .first()
+        ):
             raise HTTPException(
                 status_code=400, detail="Case ID already taken by another patient.")
         patient_db.case_id = patient_update_data.case_id
@@ -413,9 +454,13 @@ def update_patient(patient_update_data: UpdatePatient, session: SessionDep = Ses
     pat_dict = patient_db.to_dict()
     current_doctor_username = "N/A"
     if patient_db.doctor_id:
-        current_doctor = session.query(Doctors.username).filter(
-            Doctors.id == patient_db.doctor_id, Doctors.is_deleted == False).scalar()
-        if current_doctor:
+        if (
+            current_doctor := session.query(Doctors.username)
+            .filter(
+                Doctors.id == patient_db.doctor_id, Doctors.is_deleted == False
+            )
+            .scalar()
+        ):
             current_doctor_username = current_doctor
     pat_dict["attendingDoctorName"] = current_doctor_username
     pat_dict["videoCount"] = session.query(VideoPath).filter(
@@ -514,9 +559,11 @@ def get_patient_by_id(patient_id: int = Query(...),
     pat_dict = patient.to_dict()
     doctor_name = "N/A"
     if patient.doctor_id:
-        doc_username = session.query(Doctors.username).filter(
-            Doctors.id == patient.doctor_id).scalar()
-        if doc_username:
+        if (
+            doc_username := session.query(Doctors.username)
+            .filter(Doctors.id == patient.doctor_id)
+            .scalar()
+        ):
             doctor_name = doc_username
     pat_dict["attendingDoctorName"] = doctor_name
     pat_dict["videoCount"] = session.query(VideoPath).filter(
@@ -734,7 +781,7 @@ async def get_dashboard_metrics(admin_doctor_id: int = Query(...), session: Sess
 @router.get("/dashboard/analysis-trends", response_model=List[DataAnalysisDataPoint])
 async def get_analysis_trends(admin_doctor_id: int = Query(...), session: SessionDep = SessionDep):
     authorize_admin(admin_doctor_id, session)
-    
+
     query_result = session.query(
         func.to_char(func.to_timestamp(Action.create_time,
                      'YYYY-MM-DD HH24:MI:SS'), 'Mon ''YY'),
@@ -750,6 +797,7 @@ async def get_analysis_trends(admin_doctor_id: int = Query(...), session: Sessio
         'month'
     ).order_by('year', 'month').all()
 
-    trend_data = [DataAnalysisDataPoint(
-        date=row[0], analyses=row[1]) for row in query_result]
-    return trend_data
+    return [
+        DataAnalysisDataPoint(date=row[0], analyses=row[1])
+        for row in query_result
+    ]

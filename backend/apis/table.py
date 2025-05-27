@@ -7,12 +7,11 @@ router = APIRouter(tags=["table"], prefix="/table")
 
 @router.get("/step_hip_degree/{action_id}")
 def get_average_step_hip_degree(action_id: int, session: SessionDep = SessionDep):
-    left_step_hip_degree_low = []
-    left_step_hip_degree_high = []
-    right_step_hip_degree_high = []
-    right_step_hip_degree_low = []
-    step_hip_degree_low = []
-    step_hip_degree_high = []
+    data = {
+        "left": {"low": [], "high": []},
+        "right": {"low": [], "high": []},
+        "all": {"low": [], "high": []}
+    }
 
     # Optimized Query: Get relevant stage IDs first
     stages_ids_query = session.query(Stage.id).filter(
@@ -33,74 +32,59 @@ def get_average_step_hip_degree(action_id: int, session: SessionDep = SessionDep
     )
 
     for step_info in steps_info_query.all():
-        # Check for None before appending
         if step_info.hip_min_degree is not None:
-            # step_hip_degree_low.append(step_info.hip_min_degree)
-            if step_info.front_leg == "left":
-                left_step_hip_degree_low.append(step_info.hip_min_degree)
-            elif step_info.front_leg == "right":
-                right_step_hip_degree_low.append(step_info.hip_min_degree)
-            step_hip_degree_low.append(step_info.hip_min_degree)
+            data[step_info.front_leg]["low"].append(step_info.hip_min_degree)
+            data["all"]["low"].append(step_info.hip_min_degree)
         if step_info.hip_max_degree is not None:
-            # step_hip_degree_high.append(step_info.hip_max_degree)
-            if step_info.front_leg == "left":
-                left_step_hip_degree_high.append(step_info.hip_max_degree)
-            elif step_info.front_leg == "right":
-                right_step_hip_degree_high.append(step_info.hip_max_degree)
-            step_hip_degree_high.append(step_info.hip_max_degree)
+            data[step_info.front_leg]["high"].append(step_info.hip_max_degree)
+            data["all"]["high"].append(step_info.hip_max_degree)
 
-    low_average, low_standard_deviation = calculate_stats(step_hip_degree_low)
-    high_average, high_standard_deviation = calculate_stats(
-        step_hip_degree_high)
-    left_low_average, left_low_standard_deviation = calculate_stats(
-        left_step_hip_degree_low)
-    left_high_average, left_high_standard_deviation = calculate_stats(
-        left_step_hip_degree_high)
-    right_low_average, right_low_standard_deviation = calculate_stats(
-        right_step_hip_degree_low)
-    right_high_average, right_high_standard_deviation = calculate_stats(
-        right_step_hip_degree_high)
+    result = {}
+    for leg in ["left", "right"]:
+        for level in ["low", "high"]:
+            avg, std = calculate_stats(data[leg][level])
+            result[f"{leg}_{level}_average"] = avg
+            result[f"{leg}_{level}_standard_deviation"] = std
+        all_degrees = data[leg]["low"] + data[leg]["high"]
+        avg, std = calculate_stats(all_degrees)
+        result[f"{leg}_average"] = avg
+        result[f"{leg}_standard_deviation"] = std
+        result[f"{leg}_min_value"] = min(all_degrees, default=0)
+        result[f"{leg}_max_value"] = max(all_degrees, default=0)
 
-    # Calculate overall stats using combined data
-    all_degrees = step_hip_degree_low + step_hip_degree_high
-    average, standard_deviation = calculate_stats(all_degrees)
-    all_left_degrees = left_step_hip_degree_low + left_step_hip_degree_high
-    all_right_degrees = right_step_hip_degree_low + right_step_hip_degree_high
-    left_average, left_standard_deviation = calculate_stats(all_left_degrees)
-    right_average, right_standard_deviation = calculate_stats(
-        all_right_degrees)
-    min_value = min(all_degrees) if all_degrees else 0
-    max_value = max(all_degrees) if all_degrees else 0
-    left_min_value = min(all_left_degrees) if all_left_degrees else 0
-    left_max_value = max(all_left_degrees) if all_left_degrees else 0
-    right_min_value = min(all_right_degrees) if all_right_degrees else 0
-    right_max_value = max(all_right_degrees) if all_right_degrees else 0
+    # 处理 all
+    all_degrees = data["all"]["low"] + data["all"]["high"]
+    avg, std = calculate_stats(all_degrees)
+    result["average"] = avg
+    result["standard_deviation"] = std
+    result["min_value"] = min(all_degrees, default=0)
+    result["max_value"] = max(all_degrees, default=0)
 
     return {
-        "low_average": low_average,
-        "high_average": high_average,
-        "left_low_average": left_low_average,
-        "left_high_average": left_high_average,
-        "right_low_average": right_low_average,
-        "right_high_average": right_high_average,
-        "left_average": left_average,
-        "right_average": right_average,
-        "average": average,
-        "min_value": min_value,
-        "max_value": max_value,
-        "left_min_value": left_min_value,
-        "left_max_value": left_max_value,
-        "right_min_value": right_min_value,
-        "right_max_value": right_max_value,
-        "left_standard_deviation": left_standard_deviation,
-        "right_standard_deviation": right_standard_deviation,
-        "left_low_standard_deviation": left_low_standard_deviation,
-        "left_high_standard_deviation": left_high_standard_deviation,
-        "right_low_standard_deviation": right_low_standard_deviation,
-        "right_high_standard_deviation": right_high_standard_deviation,
-        "low_standard_deviation": low_standard_deviation,
-        "high_standard_deviation": high_standard_deviation,
-        "standard_deviation": standard_deviation,  # Corrected: uses combined data
+        "low_average": result["left_low_average"],
+        "high_average": result["left_high_average"],
+        "left_low_average": result["left_low_average"],
+        "left_high_average": result["left_high_average"],
+        "right_low_average": result["right_low_average"],
+        "right_high_average": result["right_high_average"],
+        "left_average": result["left_average"],
+        "right_average": result["right_average"],
+        "average": result["average"],
+        "min_value": result["left_min_value"],
+        "max_value": result["left_max_value"],
+        "left_min_value": result["left_min_value"],
+        "left_max_value": result["left_max_value"],
+        "right_min_value": result["right_min_value"],
+        "right_max_value": result["right_max_value"],
+        "left_standard_deviation": result["left_standard_deviation"],
+        "right_standard_deviation": result["right_standard_deviation"],
+        "left_low_standard_deviation": result["left_low_standard_deviation"],
+        "left_high_standard_deviation": result["left_high_standard_deviation"],
+        "right_low_standard_deviation": result["right_low_standard_deviation"],
+        "right_high_standard_deviation": result["right_high_standard_deviation"],
+        "low_standard_deviation": result["left_low_standard_deviation"],
+        "high_standard_deviation": result["left_high_standard_deviation"],
+        "standard_deviation": result["standard_deviation"],
         "chart_url": f"/dashboard/step_hip_degree/{action_id}"
     }
 
@@ -138,12 +122,12 @@ def get_average_step_length(action_id: int, session: SessionDep = SessionDep):
     right_average, right_standard_deviation = calculate_stats(
         right_step_length)
     average, standard_deviation = calculate_stats(step_length)
-    left_min_value = min(left_step_length) if left_step_length else 0
-    left_max_value = max(left_step_length) if left_step_length else 0
-    right_min_value = min(right_step_length) if right_step_length else 0
-    right_max_value = max(right_step_length) if right_step_length else 0
-    min_value = min(step_length) if step_length else 0
-    max_value = max(step_length) if step_length else 0
+    left_min_value = min(left_step_length, default=0)
+    left_max_value = max(left_step_length, default=0)
+    right_min_value = min(right_step_length, default=0)
+    right_max_value = max(right_step_length, default=0)
+    min_value = min(step_length, default=0)
+    max_value = max(step_length, default=0)
 
 
     return {
@@ -194,21 +178,21 @@ def get_average_step_width(action_id: int, session: SessionDep = SessionDep):
     left_average, left_standard_deviation = calculate_stats(left_step_width)
     right_average, right_standard_deviation = calculate_stats(
         right_step_width)
-    
+
     return {
         "left_average": left_average,
         "right_average": right_average,
         "average": average,
         "left_standard_deviation": left_standard_deviation,
         "right_standard_deviation": right_standard_deviation,
-        "left_min_value": min(left_step_width) if left_step_width else 0,
-        "left_max_value": max(left_step_width) if left_step_width else 0,
-        "right_min_value": min(right_step_width) if right_step_width else 0,
-        "right_max_value": max(right_step_width) if right_step_width else 0,
-        "min_value": min(step_width) if step_width else 0,
-        "max_value": max(step_width) if step_width else 0,
+        "left_min_value": min(left_step_width, default=0),
+        "left_max_value": max(left_step_width, default=0),
+        "right_min_value": min(right_step_width, default=0),
+        "right_max_value": max(right_step_width, default=0),
+        "min_value": min(step_width, default=0),
+        "max_value": max(step_width, default=0),
         "standard_deviation": standard_deviation,
-        "chart_url": f"/dashboard/step_width/{action_id}"
+        "chart_url": f"/dashboard/step_width/{action_id}",
     }
 
 @router.get("/step_speed/{action_id}")
@@ -243,12 +227,12 @@ def get_average_step_speed(action_id: int, session: SessionDep = SessionDep):
     left_average, left_standard_deviation = calculate_stats(left_step_speed)
     right_average, right_standard_deviation = calculate_stats(right_step_speed)
     average, standard_deviation = calculate_stats(step_speed)
-    left_min_value = min(left_step_speed) if left_step_speed else 0
-    left_max_value = max(left_step_speed) if left_step_speed else 0
-    right_min_value = min(right_step_speed) if right_step_speed else 0
-    right_max_value = max(right_step_speed) if right_step_speed else 0
-    min_value = min(step_speed) if step_speed else 0
-    max_value = max(step_speed) if step_speed else 0
+    left_min_value = min(left_step_speed, default=0)
+    left_max_value = max(left_step_speed, default=0)
+    right_min_value = min(right_step_speed, default=0)
+    right_max_value = max(right_step_speed, default=0)
+    min_value = min(step_speed, default=0)
+    max_value = max(step_speed, default=0)
 
     all_speeds = left_step_speed + right_step_speed
     average, standard_deviation = calculate_stats(all_speeds)
@@ -304,12 +288,12 @@ def get_average_step_stride(action_id: int, session: SessionDep = SessionDep):
         left_step_stride)
     right_average, right_standard_deviation = calculate_stats(
         right_step_stride)
-    left_min_value = min(left_step_stride) if left_step_stride else 0
-    left_max_value = max(left_step_stride) if left_step_stride else 0
-    right_min_value = min(right_step_stride) if right_step_stride else 0
-    right_max_value = max(right_step_stride) if right_step_stride else 0
-    min_value = min(step_stride) if step_stride else 0
-    max_value = max(step_stride) if step_stride else 0
+    left_min_value = min(left_step_stride, default=0)
+    left_max_value = max(left_step_stride, default=0)
+    right_min_value = min(right_step_stride, default=0)
+    right_max_value = max(right_step_stride, default=0)
+    min_value = min(step_stride, default=0)
+    max_value = max(step_stride, default=0)
 
     return {
         "left_average": left_average,
@@ -362,12 +346,12 @@ def get_average_step_difference(action_id: int, session: SessionDep = SessionDep
         left_step_difference)
     right_average, right_standard_deviation = calculate_stats(
         right_step_difference)
-    left_min_value = min(left_step_difference) if left_step_difference else 0
-    left_max_value = max(left_step_difference) if left_step_difference else 0
-    right_min_value = min(right_step_difference) if right_step_difference else 0
-    right_max_value = max(right_step_difference) if right_step_difference else 0
-    min_value = min(step_difference) if step_difference else 0
-    max_value = max(step_difference) if step_difference else 0
+    left_min_value = min(left_step_difference, default=0)
+    left_max_value = max(left_step_difference, default=0)
+    right_min_value = min(right_step_difference, default=0)
+    right_max_value = max(right_step_difference, default=0)
+    min_value = min(step_difference, default=0)
+    max_value = max(step_difference, default=0)
 
     return {
         "left_average": left_average,
@@ -419,12 +403,12 @@ def get_average_support_time(action_id: int, session: SessionDep = SessionDep):
     right_average, right_standard_deviation = calculate_stats(
         right_support_time)
     average, standard_deviation = calculate_stats(support_time)
-    left_min_value = min(left_support_time) if left_support_time else 0
-    left_max_value = max(left_support_time) if left_support_time else 0
-    right_min_value = min(right_support_time) if right_support_time else 0
-    right_max_value = max(right_support_time) if right_support_time else 0
-    min_value = min(support_time) if support_time else 0
-    max_value = max(support_time) if support_time else 0
+    left_min_value = min(left_support_time, default=0)
+    left_max_value = max(left_support_time, default=0)
+    right_min_value = min(right_support_time, default=0)
+    right_max_value = max(right_support_time, default=0)
+    min_value = min(support_time, default=0)
+    max_value = max(support_time, default=0)
 
     return {
         "left_average": left_average,
@@ -477,12 +461,12 @@ def get_average_liftoff_height(action_id: int, session: SessionDep = SessionDep)
     right_average, right_standard_deviation = calculate_stats(
         right_liftoff_height)
     average, standard_deviation = calculate_stats(liftoff_height)
-    left_min_value = min(left_liftoff_height) if left_liftoff_height else 0
-    left_max_value = max(left_liftoff_height) if left_liftoff_height else 0
-    right_min_value = min(right_liftoff_height) if right_liftoff_height else 0
-    right_max_value = max(right_liftoff_height) if right_liftoff_height else 0
-    min_value = min(liftoff_height) if liftoff_height else 0
-    max_value = max(liftoff_height) if liftoff_height else 0
+    left_min_value = min(left_liftoff_height, default=0)
+    left_max_value = max(left_liftoff_height, default=0)
+    right_min_value = min(right_liftoff_height, default=0)
+    right_max_value = max(right_liftoff_height, default=0)
+    min_value = min(liftoff_height, default=0)
+    max_value = max(liftoff_height, default=0)
 
     return {
         "left_average": left_average,

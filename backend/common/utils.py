@@ -33,11 +33,7 @@ def calculate_stats(data: list[float | int | None]) -> tuple[float, float]:
 
     average = sum(filtered_data) / n
 
-    if n < 2:
-        std_dev = 0.0
-    else:
-        std_dev = statistics.stdev(filtered_data)
-
+    std_dev = 0.0 if n < 2 else statistics.stdev(filtered_data)
     return round(average, 4), round(std_dev, 4)
 
 
