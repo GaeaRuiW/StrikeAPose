@@ -96,6 +96,7 @@ async def inference_api(inference_request: InferenceRequest):
     video_path = inference_request.video_path
     output_video_path = video_path.replace('original', 'inference')
     output_json_path = output_video_path.replace('mp4', 'json')
+    output_video_path = f"{action_id}-{output_video_path}"
     action = inference_request.action
     print("original video path: ", video_path)
     print("output video path: ", output_video_path)

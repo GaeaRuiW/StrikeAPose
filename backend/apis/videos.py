@@ -65,7 +65,7 @@ def delete_video(video: DeleteVideo = Body(...), session: SessionDep = SessionDe
         video_.is_deleted = True
 
     all_actions = session.query(Action).filter(
-        Action.video_id == video_.id, Action.is_deleted == False).all()
+        Action.original_video_id == video_.id, Action.is_deleted == False).all()
     all_parent_actions = session.query(Action).filter(
         Action.parent_id == action_id, Action.is_deleted == False).all()
     all_actions.extend(all_parent_actions)
@@ -315,20 +315,20 @@ def get_videos(patient_id: int, session: SessionDep = SessionDep):
     return {"videos": [video.to_dict() for video in videos]}
 
 
-@router.get("/get_inference_video_by_original_id/{original_video_id}")
-def get_video_by_original(original_video_id: int, session: SessionDep = SessionDep):
-    video = session.query(VideoPath).filter(
-        VideoPath.id == original_video_id, VideoPath.is_deleted == False).first()
-    if not video:
-        return {"message": "Video not found"}
-    video_path = video.video_path
-    video_path = video_path.replace("original", "inference")
-    reference_video = session.query(VideoPath).filter(
-        VideoPath.video_path == video_path,
-        VideoPath.original_video == False,
-        VideoPath.inference_video == True,
-        VideoPath.is_deleted == False).first()
-    return reference_video.to_dict() if reference_video else {"message": "Reference video not found"}
+# @router.get("/get_inference_video_by_original_id/{original_video_id}")
+# def get_video_by_original(original_video_id: int, session: SessionDep = SessionDep):
+#     video = session.query(VideoPath).filter(
+#         VideoPath.id == original_video_id, VideoPath.is_deleted == False).first()
+#     if not video:
+#         return {"message": "Video not found"}
+#     video_path = video.video_path
+#     video_path = video_path.replace("original", "inference")
+#     reference_video = session.query(VideoPath).filter(
+#         VideoPath.video_path == video_path,
+#         VideoPath.original_video == False,
+#         VideoPath.inference_video == True,
+#         VideoPath.is_deleted == False).first()
+#     return reference_video.to_dict() if reference_video else {"message": "Reference video not found"}
 
 
 @router.get("/get_video_by_id/{video_id}")
@@ -345,6 +345,7 @@ def insert_inference_video(action_id: int, session: SessionDep = SessionDep):
     if not video:
         return {"message": "Video not found"}
     new_video_path = video.video_path.replace("original", "inference")
+    new_video_path = f"{action_id}-{new_video_path}"
     new_video = VideoPath(video_path=new_video_path, patient_id=video.patient_id, original_video=False, inference_video=True, is_deleted=False, action_id=action_id, notes=None,
                           create_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"), update_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
     session.add(new_video)
