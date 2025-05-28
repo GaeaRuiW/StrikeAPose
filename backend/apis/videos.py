@@ -345,7 +345,7 @@ def insert_inference_video(action_id: int, session: SessionDep = SessionDep):
     if not video:
         return {"message": "Video not found"}
     new_video_path = video.video_path.replace("original", "inference")
-    new_video_path = f"{action_id}-{new_video_path}"
+    new_video_path = f"{os.path.dirname(new_video_path)}/{action_id}-{os.path.basename(new_video_path)}"
     new_video = VideoPath(video_path=new_video_path, patient_id=video.patient_id, original_video=False, inference_video=True, is_deleted=False, action_id=action_id, notes=None,
                           create_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"), update_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
     session.add(new_video)
