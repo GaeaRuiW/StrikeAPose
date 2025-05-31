@@ -69,6 +69,57 @@ StrikeAPose 是一个基于视频的动作检测系统，用户可以上传视�
 - `ui/`: 前端代码，提供用户界面。
 - `docker-compose.yml`: Docker Compose 配置文件，用于启动所有服务。
 
+## 架构
+
+```mermaid
+graph TD
+    subgraph 用户交互
+        frontend["前端 (React, Ant Design, Echarts)<br>"]
+        admin_ui["后台管理 (Node.js, Next.js)<br>"]
+    end
+
+    subgraph ApplicationPlatform [部署: Docker Compose]
+        subgraph Services
+            backend["后端 (Python, FastAPI)<br>APIs: 任务管理服务，图表服务，医生服务，病人管理服务，视频服务，后台管理服务"]
+            queue_service["消息队列 (Python Worker)<br><em>使用 Redis Lists: waiting_actions, running_actions, error_actions</em>"]
+            core_service["算法服务 (Python, AI/ML)<br>服务端点: /inference/ (threaded)"]
+        end
+
+        subgraph 数据库
+            db["关系型数据库 (PostgreSQL)"]
+            redis_db["非关系型数据库 (Redis)<br><em>任务队列 & 缓存</em>"]
+            video_storage["视频仓库 (文件系统卷)<br><em>/data/videos</em>"]
+        end
+    end
+
+    subgraph CICD [CI/CD]
+        github_actions["GitHub Actions<br><em>.github/workflows/deploy.yml</em>"]
+    end
+
+    %% User Flow & Admin UI
+    frontend -- HTTP API --> backend
+    admin_ui -- HTTP API --> backend
+
+    %% Backend Interactions
+    backend -- 增删改查 --> db
+    backend -- 任务队列 --> redis_db
+    backend -- 视频读写 --> video_storage
+    backend -- 通过redis队列调用算法服务 --> redis_db
+
+    %% Queue Service Interactions
+    queue_service -- 从‘waiting_actions’队列中取出任务 (Redis List) --> redis_db
+    queue_service -- 调用 /inference/ (算法服务) --> core_service
+    queue_service -- 更新任务状态 (HTTP API) --> backend
+
+    %% Core Service Interactions
+    core_service -- 读取原视频 --> video_storage
+    core_service -- 写入生成的骨骼视频 --> video_storage
+    core_service -- 更新算法结果（步长、步宽等） & 算法状态 (HTTP API) --> backend
+
+    %% Build & Deploy
+    github_actions -- 构建 & 部署 --> ApplicationPlatform
+```
+
 ## 贡献
 
 欢迎提交 Issue 或 Pull Request 来改进本项目。
