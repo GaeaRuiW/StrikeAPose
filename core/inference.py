@@ -45,7 +45,7 @@ def get_perspective_matrix(frame, point_model, frame_count, orig_frame, fps=24.0
             points = sorted(points, key=lambda x: (x[0], x[1]))
             bottom_left, top_left, top_right, bottom_right = points
             sorted_points = [bottom_left, top_left, top_right, bottom_right]
-            print(f"Sorted points: {sorted_points}")
+            # print(f"Sorted points: {sorted_points}")
             '''
             # 绘制标记连线并保存截图
             for i in range(4):
@@ -69,7 +69,7 @@ def get_perspective_matrix(frame, point_model, frame_count, orig_frame, fps=24.0
         
         src_points = np.array(sorted_points, dtype='float32')
         M = cv2.getPerspectiveTransform(src_points, dst_points)
-        print(f"Perspective matrix calculated at frame {frame_count}!")
+        # print(f"Perspective matrix calculated at frame {frame_count}!")
         return M, sorted_points
     return None, None
 

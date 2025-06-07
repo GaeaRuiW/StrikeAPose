@@ -5,7 +5,7 @@ from sqlmodel import Field, SQLModel
 
 class Stage(SQLModel, table=True):
     id: int = Field(primary_key=True)
-    action_id: int
+    object_id: int
     stage_n: int
     start_frame: int
     end_frame: int
@@ -13,8 +13,8 @@ class Stage(SQLModel, table=True):
     update_time: str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     is_deleted: bool
 
-    def __init__(self, action_id: int, stage_n: int, start_frame: int, end_frame: int, create_time: str, update_time: str, is_deleted: bool):
-        self.action_id = action_id
+    def __init__(self, object_id: int, stage_n: int, start_frame: int, end_frame: int, create_time: str, update_time: str, is_deleted: bool):
+        self.object_id = object_id
         self.stage_n = stage_n
         self.start_frame = start_frame
         self.end_frame = end_frame
@@ -25,7 +25,7 @@ class Stage(SQLModel, table=True):
     def to_dict(self):
         return {
             "id": self.id,
-            "action_id": self.action_id,
+            "object_id": self.object_id,
             "stage_n": self.stage_n,
             "start_frame": self.start_frame,
             "end_frame": self.end_frame,

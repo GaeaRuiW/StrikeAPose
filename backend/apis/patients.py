@@ -51,6 +51,10 @@ def patient_login(patient: PatientLoginModel = Body(..., embed=True), session: S
 
 @router.put("/insert_patient")
 def insert_patient(patient: CreatePatientModel = Body(..., embed=True), session: SessionDep = SessionDep):
+    if session.query(Patients).filter(
+        Patients.case_id == patient.case_id, Patients.is_deleted == False
+    ).first():
+        return {"message": "Case ID already exists"}, 400
     patient = Patients(username=patient.username, age=patient.age, gender=patient.gender, case_id=patient.case_id, doctor_id=patient.doctor_id,
                        create_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"), update_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"), is_deleted=False)
     session.add(patient)

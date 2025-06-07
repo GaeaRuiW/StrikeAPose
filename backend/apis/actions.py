@@ -3,7 +3,7 @@ from typing import List, Optional
 
 from common.utils import get_redis_connection
 from fastapi import APIRouter, Body
-from models import Action, SessionDep, Stage, StepsInfo, VideoPath
+from models import Action, SessionDep, Stage, StepsInfo, VideoPath, Objects
 from pydantic import BaseModel
 
 
@@ -38,8 +38,9 @@ class UpdateActionData(BaseModel):
 
 class UpdateAction(BaseModel):
     action_id: int
+    object_id: int
     inference_video_id: Optional[int] = None
-    data: Optional[List[UpdateActionData]]
+    objects: Optional[List[UpdateActionData]] = None
 
 
 class UpdateActionStatus(BaseModel):
@@ -82,8 +83,6 @@ async def create_action(action: CreateAction = Body(...), session: SessionDep = 
     redis_client = get_redis_connection()
     redis_client.rpush("waiting_actions",
                        f"{action.patient_id}-{action_id}-{action.video_id}")
-    video.action_id = action_id
-    video.update_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     session.add(video)
     session.commit()
     return {"message": "Action created successfully", "action_id": action_id}
@@ -127,39 +126,28 @@ async def delete_action(action_id: int, session: SessionDep = SessionDep):
         Action.id == action_id, Action.is_deleted == False).first()
     if not action:
         return {"message": "Action not found"}
-    action.is_deleted = True
-    action.update_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     # if action.parent_id == action_id:
     actions = session.query(Action).filter(
         Action.id == action_id, Action.is_deleted == False).all()
     for action_ in actions:
         action_.is_deleted = True
         action_.update_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        stages = session.query(Stage).filter(
-            Stage.action_id == action_.id, Stage.is_deleted == False).all()
-        for stage in stages:
-            stage.is_deleted = True
-            stage.update_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            steps_info = session.query(StepsInfo).filter(
-                StepsInfo.stage_id == stage.id, StepsInfo.is_deleted == False).all()
-            for step_info in steps_info:
-                step_info.is_deleted = True
-                step_info.update_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        # videos = session.query(VideoPath).filter(
-        #     VideoPath.action_id == action_id, VideoPath.is_deleted == False).all()
-        # for video in videos:
-        #     video.is_deleted = True
-        #     video.update_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    # stages = session.query(Stage).filter(
-    #     Stage.action_id == action_id, Stage.is_deleted == False).all()
-    # for stage in stages:
-    #     stage.is_deleted = True
-    #     stage.update_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    #     steps_info = session.query(StepsInfo).filter(
-    #         StepsInfo.stage_id == stage.id, StepsInfo.is_deleted == False).all()
-    #     for step_info in steps_info:
-    #         step_info.is_deleted = True
-    #         step_info.update_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        objects = session.query(Objects).filter(
+            Objects.action_id == action_.id, Objects.is_deleted == False).all()
+        for object_ in objects:
+            object_.is_deleted = True
+            object_.update_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            stages = session.query(Stage).filter(
+                Stage.action_id == action_.id, Stage.is_deleted == False).all()
+            for stage in stages:
+                stage.is_deleted = True
+                stage.update_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                steps_info = session.query(StepsInfo).filter(
+                    StepsInfo.stage_id == stage.id, StepsInfo.is_deleted == False).all()
+                for step_info in steps_info:
+                    step_info.is_deleted = True
+                    step_info.update_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
     session.commit()
     redis_conn.lrem("waiting_actions", 0,
                     f"{action.patient_id}-{action_id}-{action.original_video_id}")
@@ -174,28 +162,82 @@ async def update_action(data: UpdateAction = Body(...), session: SessionDep = Se
         Action.id == data.action_id, Action.is_deleted == False).first()
     if not action:
         return {"message": "Action not found"}
-    if data.inference_video_id:
-        action.inference_video_id = data.inference_video_id
-        action.update_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        session.commit()
-    for stage_data in sorted(data.data, key=lambda x: x.stage_n):
-        stage = Stage(action_id=data.action_id, stage_n=stage_data.stage_n,
-                      start_frame=stage_data.start_frame, end_frame=stage_data.end_frame, is_deleted=False, create_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"), update_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+    object_ = session.query(Objects).filter(
+        Objects.id == data.object_id, Objects.is_deleted == False, Objects.action_id == data.action_id).first()
+    if not object_:
+        return {"message": "Object not found"}
+    for stage_data in data.objects:
+        # for stage_data in sorted(object_data, key=lambda x: x.stage_n):
+        #     stage = Stage(action_id=data.action_id, object_id=data.object_id, stage_n=stage_data.stage_n,
+        #                   start_frame=stage_data.start_frame, end_frame=stage_data.end_frame, is_deleted=False, create_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"), update_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+        #     session.add(stage)
+        #     session.commit()
+        #     for n, step_info in enumerate(stage_data.steps_info):
+        #         step_info_db = StepsInfo(stage_id=stage.id, step_id=n + 1,
+        #                                  start_frame=step_info.start_frame, end_frame=step_info.end_frame,
+        #                                  step_length=step_info.step_length, step_speed=step_info.step_speed,
+        #                                  front_leg=step_info.front_leg, hip_min_degree=step_info.hip_min_degree,
+        #                                  hip_max_degree=step_info.hip_max_degree, first_step=step_info.first_step,
+        #                                  steps_diff=step_info.steps_diff, stride_length=step_info.stride_length,
+        #                                  step_width=step_info.step_width,
+        #                                  support_time=step_info.support_time, liftoff_height=step_info.liftoff_height,
+        #                                  is_deleted=False, create_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"), update_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+        #         session.add(step_info_db)
+        stage = Stage(
+            object_id=data.object_id,
+            stage_n=stage_data.stage_n,
+            start_frame=stage_data.start_frame,
+            end_frame=stage_data.end_frame,
+            is_deleted=False,
+            create_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            update_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        )
         session.add(stage)
         session.commit()
         for n, step_info in enumerate(stage_data.steps_info):
-            step_info_db = StepsInfo(stage_id=stage.id, step_id=n + 1,
-                                     start_frame=step_info.start_frame, end_frame=step_info.end_frame,
-                                     step_length=step_info.step_length, step_speed=step_info.step_speed,
-                                     front_leg=step_info.front_leg, hip_min_degree=step_info.hip_min_degree,
-                                     hip_max_degree=step_info.hip_max_degree, first_step=step_info.first_step,
-                                     steps_diff=step_info.steps_diff, stride_length=step_info.stride_length,
-                                     step_width=step_info.step_width,
-                                     support_time=step_info.support_time, liftoff_height=step_info.liftoff_height,
-                                     is_deleted=False, create_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"), update_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+            step_info_db = StepsInfo(
+                stage_id=stage.id,
+                step_id=n + 1,
+                start_frame=step_info.start_frame,
+                end_frame=step_info.end_frame,
+                step_length=step_info.step_length,
+                step_speed=step_info.step_speed,
+                front_leg=step_info.front_leg,
+                hip_min_degree=step_info.hip_min_degree,
+                hip_max_degree=step_info.hip_max_degree,
+                first_step=step_info.first_step,
+                steps_diff=step_info.steps_diff,
+                stride_length=step_info.stride_length,
+                step_width=step_info.step_width,
+                support_time=step_info.support_time,
+                liftoff_height=step_info.liftoff_height,
+                is_deleted=False,
+                create_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                update_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            )
             session.add(step_info_db)
     session.commit()
     return {"message": "Action updated successfully"}
+
+
+    # for stage_data in sorted(data.data, key=lambda x: x.stage_n):
+    #     stage = Stage(action_id=data.action_id, stage_n=stage_data.stage_n,
+    #                   start_frame=stage_data.start_frame, end_frame=stage_data.end_frame, is_deleted=False, create_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"), update_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+    #     session.add(stage)
+    #     session.commit()
+    #     for n, step_info in enumerate(stage_data.steps_info):
+    #         step_info_db = StepsInfo(stage_id=stage.id, step_id=n + 1,
+    #                                  start_frame=step_info.start_frame, end_frame=step_info.end_frame,
+    #                                  step_length=step_info.step_length, step_speed=step_info.step_speed,
+    #                                  front_leg=step_info.front_leg, hip_min_degree=step_info.hip_min_degree,
+    #                                  hip_max_degree=step_info.hip_max_degree, first_step=step_info.first_step,
+    #                                  steps_diff=step_info.steps_diff, stride_length=step_info.stride_length,
+    #                                  step_width=step_info.step_width,
+    #                                  support_time=step_info.support_time, liftoff_height=step_info.liftoff_height,
+    #                                  is_deleted=False, create_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"), update_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+    #         session.add(step_info_db)
+    # session.commit()
+    # return {"message": "Action updated successfully"}
 
 
 @router.post("/update_action_status")
@@ -227,3 +269,24 @@ async def update_action_progress(action_progress: UpdateActionProgress, session:
     action.update_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     session.commit()
     return {"message": "Action progress updated successfully"}
+
+@router.get("/get_action_objects/{action_id}")
+async def get_action_objects(action_id: int, session: SessionDep = SessionDep):
+    if (
+        action := session.query(Action)
+        .filter(Action.id == action_id, Action.is_deleted == False)
+        .first()
+    ):
+        return (
+            {"objects": [obj.to_dict() for obj in objects]}
+            if (
+                objects := session.query(Objects)
+                .filter(
+                    Objects.action_id == action_id, Objects.is_deleted == False
+                )
+                .all()
+            )
+            else {"message": "No objects found for this action"}
+        )
+    else:
+        return {"message": "Action not found"}

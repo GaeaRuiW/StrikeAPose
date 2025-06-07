@@ -8,7 +8,7 @@ class Doctors(SQLModel, table=True):
     id: int = Field(primary_key=True)
     username: str = Field(index=True)
     password: str
-    email: str
+    email: str = Field(unique=True, index=True, nullable=False)
     phone: Optional[str] = Field(default=None, nullable=True)
     department: Optional[str] = Field(default="康复科", nullable=True)
     role_id: Optional[int] = Field(default=2, nullable=True) # Default to 2 (Doctor role) instead of 1 (Admin)

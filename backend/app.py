@@ -1,7 +1,7 @@
 import os
 
 from apis.actions import router as action_router
-from apis.dashboard import router as dashboard_router
+from apis.dashboard2 import router as dashboard_router
 from apis.doctors import router as doctor_router
 from apis.management import router as management_router
 from apis.patients import router as patient_router

@@ -1,485 +1,540 @@
 from common.utils import calculate_stats
 from fastapi import APIRouter
-from models import SessionDep, Stage, StepsInfo
+from models import SessionDep, Stage, StepsInfo, Objects
 
 router = APIRouter(tags=["tables"], prefix="/table")
 
 
 @router.get("/step_hip_degree/{action_id}")
 def get_average_step_hip_degree(action_id: int, session: SessionDep = SessionDep):
-    data = {
-        "left": {"low": [], "high": []},
-        "right": {"low": [], "high": []},
-        "all": {"low": [], "high": []}
-    }
-
-    # Optimized Query: Get relevant stage IDs first
-    stages_ids_query = session.query(Stage.id).filter(
-        Stage.action_id == action_id, Stage.is_deleted == False
+    final_results = []
+    objects_query = session.query(Objects).filter(
+        Objects.action_id == action_id, Objects.is_deleted == False
     )
-    stage_ids = [id_tuple[0] for id_tuple in stages_ids_query.all()]
-
-    if not stage_ids:
-        # Return early if no relevant stages found
-        return {"low_average": 0, "high_average": 0, "average": 0,
+    if not objects_query.first():
+        return {"data": [{"unknown": {"low_average": 0, "high_average": 0, "average": 0,
                 "low_standard_deviation": 0, "high_standard_deviation": 0,
-                "standard_deviation": 0, "chart_url": f"/dashboard/step_hip_degree/{action_id}"}
+                                      "standard_deviation": 0, "chart_url": f"/dashboard/step_hip_degree/{action_id}"}}], "message": "No objects found for the given action_id."}
+    objects = list(objects_query.all())
+    for obj in objects:
+        data = {
+            "left": {"low": [], "high": []},
+            "right": {"low": [], "high": []},
+            "all": {"low": [], "high": []}
+        }
+        stages_ids_query = session.query(Stage.id).filter(
+            Stage.object_id == obj.id, Stage.is_deleted == False
+        )
+        stage_ids = [id_tuple[0] for id_tuple in stages_ids_query.all()]
 
-    # Single query for all steps info
-    steps_info_query = session.query(StepsInfo).filter(
-        StepsInfo.stage_id.in_(stage_ids),
-        StepsInfo.is_deleted == False
-    )
+        if not stage_ids:
+            continue
 
-    for step_info in steps_info_query.all():
-        if step_info.hip_min_degree is not None:
-            data[step_info.front_leg]["low"].append(step_info.hip_min_degree)
-            data["all"]["low"].append(step_info.hip_min_degree)
-        if step_info.hip_max_degree is not None:
-            data[step_info.front_leg]["high"].append(step_info.hip_max_degree)
-            data["all"]["high"].append(step_info.hip_max_degree)
+        # Single query for all steps info
+        steps_info_query = session.query(StepsInfo).filter(
+            StepsInfo.stage_id.in_(stage_ids),
+            StepsInfo.is_deleted == False
+        )
 
-    result = {}
-    for leg in ["left", "right"]:
-        for level in ["low", "high"]:
-            avg, std = calculate_stats(data[leg][level])
-            result[f"{leg}_{level}_average"] = avg
-            result[f"{leg}_{level}_standard_deviation"] = std
-        all_degrees = data[leg]["low"] + data[leg]["high"]
+        for step_info in steps_info_query.all():
+            if step_info.hip_min_degree is not None:
+                data[step_info.front_leg]["low"].append(
+                    step_info.hip_min_degree)
+                data["all"]["low"].append(step_info.hip_min_degree)
+            if step_info.hip_max_degree is not None:
+                data[step_info.front_leg]["high"].append(
+                    step_info.hip_max_degree)
+                data["all"]["high"].append(step_info.hip_max_degree)
+
+        result = {}
+        for leg in ["left", "right"]:
+            for level in ["low", "high"]:
+                avg, std = calculate_stats(data[leg][level])
+                result[f"{leg}_{level}_average"] = avg
+                result[f"{leg}_{level}_standard_deviation"] = std
+            all_degrees = data[leg]["low"] + data[leg]["high"]
+            avg, std = calculate_stats(all_degrees)
+            result[f"{leg}_average"] = avg
+            result[f"{leg}_standard_deviation"] = std
+            result[f"{leg}_min_value"] = min(all_degrees, default=0)
+            result[f"{leg}_max_value"] = max(all_degrees, default=0)
+
+        # 处理 all
+        all_degrees = data["all"]["low"] + data["all"]["high"]
         avg, std = calculate_stats(all_degrees)
-        result[f"{leg}_average"] = avg
-        result[f"{leg}_standard_deviation"] = std
-        result[f"{leg}_min_value"] = min(all_degrees, default=0)
-        result[f"{leg}_max_value"] = max(all_degrees, default=0)
+        result["average"] = avg
+        result["standard_deviation"] = std
+        result["min_value"] = min(all_degrees, default=0)
+        result["max_value"] = max(all_degrees, default=0)
+        result["chart_url"] = f"/dashboard/step_hip_degree/{action_id}/{obj.id}"
+        final_results.append({obj.name: result})
 
-    # 处理 all
-    all_degrees = data["all"]["low"] + data["all"]["high"]
-    avg, std = calculate_stats(all_degrees)
-    result["average"] = avg
-    result["standard_deviation"] = std
-    result["min_value"] = min(all_degrees, default=0)
-    result["max_value"] = max(all_degrees, default=0)
-
-    return {
-        "low_average": result["left_low_average"],
-        "high_average": result["left_high_average"],
-        "left_low_average": result["left_low_average"],
-        "left_high_average": result["left_high_average"],
-        "right_low_average": result["right_low_average"],
-        "right_high_average": result["right_high_average"],
-        "left_average": result["left_average"],
-        "right_average": result["right_average"],
-        "average": result["average"],
-        "min_value": result["left_min_value"],
-        "max_value": result["left_max_value"],
-        "left_min_value": result["left_min_value"],
-        "left_max_value": result["left_max_value"],
-        "right_min_value": result["right_min_value"],
-        "right_max_value": result["right_max_value"],
-        "left_standard_deviation": result["left_standard_deviation"],
-        "right_standard_deviation": result["right_standard_deviation"],
-        "left_low_standard_deviation": result["left_low_standard_deviation"],
-        "left_high_standard_deviation": result["left_high_standard_deviation"],
-        "right_low_standard_deviation": result["right_low_standard_deviation"],
-        "right_high_standard_deviation": result["right_high_standard_deviation"],
-        "low_standard_deviation": result["left_low_standard_deviation"],
-        "high_standard_deviation": result["left_high_standard_deviation"],
-        "standard_deviation": result["standard_deviation"],
-        "chart_url": f"/dashboard/step_hip_degree/{action_id}"
-    }
+    return {"data": final_results, "message": "Success"}
 
 
 @router.get("/step_length/{action_id}")
 def get_average_step_length(action_id: int, session: SessionDep = SessionDep):
-    left_step_length = []
-    right_step_length = []
-    step_length = []
-
-    stages_ids_query = session.query(Stage.id).filter(
-        Stage.action_id == action_id, Stage.is_deleted == False
+    final_results = []
+    objects_query = session.query(Objects).filter(
+        Objects.action_id == action_id, Objects.is_deleted == False
     )
-    stage_ids = [id_tuple[0] for id_tuple in stages_ids_query.all()]
-
-    if not stage_ids:
-        return {"left_average": 0, "right_average": 0, "average": 0,
+    if not objects_query.first():
+        return {"data": [{"unknown": {"left_average": 0, "right_average": 0, "average": 0,
                 "left_standard_deviation": 0, "right_standard_deviation": 0,
-                "standard_deviation": 0, "chart_url": f"/dashboard/step_length/{action_id}"}
+                                      "standard_deviation": 0, "chart_url": f"/dashboard/step_length/{action_id}"}}], "message": "No objects found for the given action_id."}
+    objects = list(objects_query.all())
+    for obj in objects:
+        left_step_length = []
+        right_step_length = []
+        step_length = []
 
-    steps_info_query = session.query(StepsInfo).filter(
-        StepsInfo.stage_id.in_(stage_ids),
-        StepsInfo.is_deleted == False
-    )
+        stages_ids_query = session.query(Stage.id).filter(
+            Stage.object_id == obj.id, Stage.is_deleted == False
+        )
+        stage_ids = [id_tuple[0] for id_tuple in stages_ids_query.all()]
 
-    for step_info in steps_info_query.all():
-        if step_info.step_length is not None:  # Check for None
-            if step_info.front_leg == "left":
-                left_step_length.append(step_info.step_length)
-            elif step_info.front_leg == "right":  # Use elif for clarity
-                right_step_length.append(step_info.step_length)
-            step_length.append(step_info.step_length)
+        if not stage_ids:
+            continue
 
-    left_average, left_standard_deviation = calculate_stats(left_step_length)
-    right_average, right_standard_deviation = calculate_stats(
-        right_step_length)
-    average, standard_deviation = calculate_stats(step_length)
-    left_min_value = min(left_step_length, default=0)
-    left_max_value = max(left_step_length, default=0)
-    right_min_value = min(right_step_length, default=0)
-    right_max_value = max(right_step_length, default=0)
-    min_value = min(step_length, default=0)
-    max_value = max(step_length, default=0)
+        steps_info_query = session.query(StepsInfo).filter(
+            StepsInfo.stage_id.in_(stage_ids),
+            StepsInfo.is_deleted == False
+        )
 
+        for step_info in steps_info_query.all():
+            if step_info.step_length is not None:  # Check for None
+                if step_info.front_leg == "left":
+                    left_step_length.append(step_info.step_length)
+                elif step_info.front_leg == "right":  # Use elif for clarity
+                    right_step_length.append(step_info.step_length)
+                step_length.append(step_info.step_length)
 
-    return {
-        "left_average": left_average,
-        "right_average": right_average,
-        "average": average,
-        "left_standard_deviation": left_standard_deviation,
-        "right_standard_deviation": right_standard_deviation,
-        "standard_deviation": standard_deviation,
-        "left_min_value": left_min_value,
-        "left_max_value": left_max_value,
-        "right_min_value": right_min_value,
-        "right_max_value": right_max_value,
-        "min_value": min_value,
-        "max_value": max_value,
-        "chart_url": f"/dashboard/step_length/{action_id}"
-    }
+        left_average, left_standard_deviation = calculate_stats(
+            left_step_length)
+        right_average, right_standard_deviation = calculate_stats(
+            right_step_length)
+        average, standard_deviation = calculate_stats(step_length)
+        left_min_value = min(left_step_length, default=0)
+        left_max_value = max(left_step_length, default=0)
+        right_min_value = min(right_step_length, default=0)
+        right_max_value = max(right_step_length, default=0)
+        min_value = min(step_length, default=0)
+        max_value = max(step_length, default=0)
+
+        final_results.append({obj.name: {
+            "left_average": left_average,
+            "right_average": right_average,
+            "average": average,
+            "left_standard_deviation": left_standard_deviation,
+            "right_standard_deviation": right_standard_deviation,
+            "standard_deviation": standard_deviation,
+            "left_min_value": left_min_value,
+            "left_max_value": left_max_value,
+            "right_min_value": right_min_value,
+            "right_max_value": right_max_value,
+            "min_value": min_value,
+            "max_value": max_value,
+            "chart_url": f"/dashboard/step_length/{action_id}/{obj.id}"
+        }})
+    return {"data": final_results, "message": "Success"}
+
 
 @router.get("/step_width/{action_id}")
 def get_average_step_width(action_id: int, session: SessionDep = SessionDep):
-    step_width = []
-    left_step_width = []
-    right_step_width = []
-
-    stages_ids_query = session.query(Stage.id).filter(
-        Stage.action_id == action_id, Stage.is_deleted == False
+    final_results = []
+    objects_query = session.query(Objects).filter(
+        Objects.action_id == action_id, Objects.is_deleted == False
     )
-    stage_ids = [id_tuple[0] for id_tuple in stages_ids_query.all()]
+    if not objects_query.first():
+        return {"data": [{"unknown": {"left_average": 0, "right_average": 0, "average": 0,
+                "left_standard_deviation": 0, "right_standard_deviation": 0,
+                                      "standard_deviation": 0, "chart_url": f"/dashboard/step_width/{action_id}"}}], "message": "No objects found for the given action_id."}
+    objects = list(objects_query.all())
+    for obj in objects:
+        step_width = []
+        left_step_width = []
+        right_step_width = []
 
-    if not stage_ids:
-        return {"average": 0, "standard_deviation": 0,
-                "chart_url": f"/dashboard/step_width/{action_id}"}
+        stages_ids_query = session.query(Stage.id).filter(
+            Stage.object_id == obj.id, Stage.is_deleted == False
+        )
+        stage_ids = [id_tuple[0] for id_tuple in stages_ids_query.all()]
 
-    steps_info_query = session.query(StepsInfo).filter(
-        StepsInfo.stage_id.in_(stage_ids),
-        StepsInfo.is_deleted == False
-    )
+        if not stage_ids:
+            continue
 
-    for step_info in steps_info_query.all():
-        if step_info.step_width is not None:
-            if step_info.front_leg == "left":
-                left_step_width.append(step_info.step_width)
-            elif step_info.front_leg == "right":
-                right_step_width.append(step_info.step_width)
-            step_width.append(step_info.step_width)
+        steps_info_query = session.query(StepsInfo).filter(
+            StepsInfo.stage_id.in_(stage_ids),
+            StepsInfo.is_deleted == False
+        )
 
-    average, standard_deviation = calculate_stats(step_width)
-    left_average, left_standard_deviation = calculate_stats(left_step_width)
-    right_average, right_standard_deviation = calculate_stats(
-        right_step_width)
+        for step_info in steps_info_query.all():
+            if step_info.step_width is not None:
+                if step_info.front_leg == "left":
+                    left_step_width.append(step_info.step_width)
+                elif step_info.front_leg == "right":
+                    right_step_width.append(step_info.step_width)
+                step_width.append(step_info.step_width)
 
-    return {
-        "left_average": left_average,
-        "right_average": right_average,
-        "average": average,
-        "left_standard_deviation": left_standard_deviation,
-        "right_standard_deviation": right_standard_deviation,
-        "left_min_value": min(left_step_width, default=0),
-        "left_max_value": max(left_step_width, default=0),
-        "right_min_value": min(right_step_width, default=0),
-        "right_max_value": max(right_step_width, default=0),
-        "min_value": min(step_width, default=0),
-        "max_value": max(step_width, default=0),
-        "standard_deviation": standard_deviation,
-        "chart_url": f"/dashboard/step_width/{action_id}",
-    }
+        average, standard_deviation = calculate_stats(step_width)
+        left_average, left_standard_deviation = calculate_stats(
+            left_step_width)
+        right_average, right_standard_deviation = calculate_stats(
+            right_step_width)
+
+        final_results.append({obj.name: {
+            "left_average": left_average,
+            "right_average": right_average,
+            "average": average,
+            "left_standard_deviation": left_standard_deviation,
+            "right_standard_deviation": right_standard_deviation,
+            "left_min_value": min(left_step_width, default=0),
+            "left_max_value": max(left_step_width, default=0),
+            "right_min_value": min(right_step_width, default=0),
+            "right_max_value": max(right_step_width, default=0),
+            "min_value": min(step_width, default=0),
+            "max_value": max(step_width, default=0),
+            "standard_deviation": standard_deviation,
+            "chart_url": f"/dashboard/step_width/{action_id}/{obj.id}",
+        }})
+    return {"data": final_results, "message": "Success"}
+
 
 @router.get("/step_speed/{action_id}")
 def get_average_step_speed(action_id: int, session: SessionDep = SessionDep):
-    left_step_speed = []
-    right_step_speed = []
-    step_speed = []
-
-    stages_ids_query = session.query(Stage.id).filter(
-        Stage.action_id == action_id, Stage.is_deleted == False
+    final_results = []
+    objects_query = session.query(Objects).filter(
+        Objects.action_id == action_id, Objects.is_deleted == False
     )
-    stage_ids = [id_tuple[0] for id_tuple in stages_ids_query.all()]
-
-    if not stage_ids:
-        return {"left_average": 0, "right_average": 0, "average": 0,
+    if not objects_query.first():
+        return {"data": [{"unknown": {"left_average": 0, "right_average": 0, "average": 0,
                 "left_standard_deviation": 0, "right_standard_deviation": 0,
-                "standard_deviation": 0, "chart_url": f"/dashboard/step_speed/{action_id}"}
+                                      "standard_deviation": 0, "chart_url": f"/dashboard/step_speed/{action_id}"}}], "message": "No objects found for the given action_id."}
+    objects = list(objects_query.all())
+    for obj in objects:
+        left_step_speed = []
+        right_step_speed = []
+        step_speed = []
 
-    steps_info_query = session.query(StepsInfo).filter(
-        StepsInfo.stage_id.in_(stage_ids),
-        StepsInfo.is_deleted == False
-    )
+        stages_ids_query = session.query(Stage.id).filter(
+            Stage.object_id == obj.id, Stage.is_deleted == False
+        )
+        stage_ids = [id_tuple[0] for id_tuple in stages_ids_query.all()]
 
-    for step_info in steps_info_query.all():
-        if step_info.step_speed is not None:  # Check for None
-            if step_info.front_leg == "left":
-                left_step_speed.append(step_info.step_speed)
-            elif step_info.front_leg == "right":
-                right_step_speed.append(step_info.step_speed)
-            step_speed.append(step_info.step_speed)
+        if not stage_ids:
+            continue
 
-    left_average, left_standard_deviation = calculate_stats(left_step_speed)
-    right_average, right_standard_deviation = calculate_stats(right_step_speed)
-    average, standard_deviation = calculate_stats(step_speed)
-    left_min_value = min(left_step_speed, default=0)
-    left_max_value = max(left_step_speed, default=0)
-    right_min_value = min(right_step_speed, default=0)
-    right_max_value = max(right_step_speed, default=0)
-    min_value = min(step_speed, default=0)
-    max_value = max(step_speed, default=0)
+        steps_info_query = session.query(StepsInfo).filter(
+            StepsInfo.stage_id.in_(stage_ids),
+            StepsInfo.is_deleted == False
+        )
 
-    all_speeds = left_step_speed + right_step_speed
-    average, standard_deviation = calculate_stats(all_speeds)
+        for step_info in steps_info_query.all():
+            if step_info.step_speed is not None:  # Check for None
+                if step_info.front_leg == "left":
+                    left_step_speed.append(step_info.step_speed)
+                elif step_info.front_leg == "right":
+                    right_step_speed.append(step_info.step_speed)
+                step_speed.append(step_info.step_speed)
 
-    return {
-        "left_average": left_average,
-        "right_average": right_average,
-        "average": average,
-        "left_standard_deviation": left_standard_deviation,
-        "right_standard_deviation": right_standard_deviation,
-        "standard_deviation": standard_deviation,  # Corrected: uses combined data
-        "left_min_value": left_min_value,
-        "left_max_value": left_max_value,
-        "right_min_value": right_min_value,
-        "right_max_value": right_max_value,
-        "min_value": min_value,
-        "max_value": max_value,
-        "chart_url": f"/dashboard/step_speed/{action_id}"
-    }
+        left_average, left_standard_deviation = calculate_stats(
+            left_step_speed)
+        right_average, right_standard_deviation = calculate_stats(
+            right_step_speed)
+        average, standard_deviation = calculate_stats(step_speed)
+        left_min_value = min(left_step_speed, default=0)
+        left_max_value = max(left_step_speed, default=0)
+        right_min_value = min(right_step_speed, default=0)
+        right_max_value = max(right_step_speed, default=0)
+        min_value = min(step_speed, default=0)
+        max_value = max(step_speed, default=0)
+
+        all_speeds = left_step_speed + right_step_speed
+        average, standard_deviation = calculate_stats(all_speeds)
+
+        final_results.append({obj.name: {
+            "left_average": left_average,
+            "right_average": right_average,
+            "average": average,
+            "left_standard_deviation": left_standard_deviation,
+            "right_standard_deviation": right_standard_deviation,
+            "standard_deviation": standard_deviation,
+            "left_min_value": left_min_value,
+            "left_max_value": left_max_value,
+            "right_min_value": right_min_value,
+            "right_max_value": right_max_value,
+            "min_value": min_value,
+            "max_value": max_value,
+            "chart_url": f"/dashboard/step_speed/{action_id}/{obj.id}"
+        }})
+    return {"data": final_results, "message": "Success"}
 
 
 @router.get("/step_stride/{action_id}")
 def get_average_step_stride(action_id: int, session: SessionDep = SessionDep):
-    step_stride = []
-    left_step_stride = []
-    right_step_stride = []
-
-    stages_ids_query = session.query(Stage.id).filter(
-        Stage.action_id == action_id, Stage.is_deleted == False
+    final_results = []
+    objects_query = session.query(Objects).filter(
+        Objects.action_id == action_id, Objects.is_deleted == False
     )
-    stage_ids = [id_tuple[0] for id_tuple in stages_ids_query.all()]
+    if not objects_query.first():
+        return {"data": [{"unknown": {"left_average": 0, "right_average": 0, "average": 0,
+                "left_standard_deviation": 0, "right_standard_deviation": 0,
+                                      "standard_deviation": 0, "chart_url": f"/dashboard/step_stride/{action_id}"}}], "message": "No objects found for the given action_id."}
+    objects = list(objects_query.all())
+    for obj in objects:
+        step_stride = []
+        left_step_stride = []
+        right_step_stride = []
 
-    if not stage_ids:
-        return {"average": 0, "standard_deviation": 0,
-                "chart_url": f"/dashboard/step_stride/{action_id}"}
+        stages_ids_query = session.query(Stage.id).filter(
+            Stage.object_id == obj.id, Stage.is_deleted == False
+        )
+        stage_ids = [id_tuple[0] for id_tuple in stages_ids_query.all()]
 
-    steps_info_query = session.query(StepsInfo).filter(
-        StepsInfo.stage_id.in_(stage_ids),
-        StepsInfo.is_deleted == False,
-        StepsInfo.first_step == False  # Keep this filter if intended
-    )
+        if not stage_ids:
+            continue
 
-    for step_info in steps_info_query.all():
-        if step_info.stride_length is not None:  # Check for None
-            if step_info.front_leg == "left":
-                left_step_stride.append(step_info.stride_length)
-            elif step_info.front_leg == "right":
-                right_step_stride.append(step_info.stride_length)
-            step_stride.append(step_info.stride_length)
+        steps_info_query = session.query(StepsInfo).filter(
+            StepsInfo.stage_id.in_(stage_ids),
+            StepsInfo.is_deleted == False,
+            StepsInfo.first_step == False  # Keep this filter if intended
+        )
 
-    average, standard_deviation = calculate_stats(step_stride)
-    left_average, left_standard_deviation = calculate_stats(
-        left_step_stride)
-    right_average, right_standard_deviation = calculate_stats(
-        right_step_stride)
-    left_min_value = min(left_step_stride, default=0)
-    left_max_value = max(left_step_stride, default=0)
-    right_min_value = min(right_step_stride, default=0)
-    right_max_value = max(right_step_stride, default=0)
-    min_value = min(step_stride, default=0)
-    max_value = max(step_stride, default=0)
+        for step_info in steps_info_query.all():
+            if step_info.stride_length is not None:  # Check for None
+                if step_info.front_leg == "left":
+                    left_step_stride.append(step_info.stride_length)
+                elif step_info.front_leg == "right":
+                    right_step_stride.append(step_info.stride_length)
+                step_stride.append(step_info.stride_length)
 
-    return {
-        "left_average": left_average,
-        "right_average": right_average,
-        "average": average,
-        "left_standard_deviation": left_standard_deviation,
-        "right_standard_deviation": right_standard_deviation,
-        "standard_deviation": standard_deviation,
-        "left_min_value": left_min_value,
-        "left_max_value": left_max_value,
-        "right_min_value": right_min_value,
-        "right_max_value": right_max_value,
-        "min_value": min_value,
-        "max_value": max_value,
-        "chart_url": f"/dashboard/step_stride/{action_id}"
-    }
+        average, standard_deviation = calculate_stats(step_stride)
+        left_average, left_standard_deviation = calculate_stats(
+            left_step_stride)
+        right_average, right_standard_deviation = calculate_stats(
+            right_step_stride)
+        left_min_value = min(left_step_stride, default=0)
+        left_max_value = max(left_step_stride, default=0)
+        right_min_value = min(right_step_stride, default=0)
+        right_max_value = max(right_step_stride, default=0)
+        min_value = min(step_stride, default=0)
+        max_value = max(step_stride, default=0)
+
+        final_results.append({obj.name: {
+            "left_average": left_average,
+            "right_average": right_average,
+            "average": average,
+            "left_standard_deviation": left_standard_deviation,
+            "right_standard_deviation": right_standard_deviation,
+            "standard_deviation": standard_deviation,
+            "left_min_value": left_min_value,
+            "left_max_value": left_max_value,
+            "right_min_value": right_min_value,
+            "right_max_value": right_max_value,
+            "min_value": min_value,
+            "max_value": max_value,
+            "chart_url": f"/dashboard/step_stride/{action_id}/{obj.id}"
+        }})
+    return {"data": final_results, "message": "Success"}
 
 
 @router.get("/step_difference/{action_id}")
 def get_average_step_difference(action_id: int, session: SessionDep = SessionDep):
-    step_difference = []
-    left_step_difference = []
-    right_step_difference = []
-
-    stages_ids_query = session.query(Stage.id).filter(
-        Stage.action_id == action_id, Stage.is_deleted == False
+    final_results = []
+    objects_query = session.query(Objects).filter(
+        Objects.action_id == action_id, Objects.is_deleted == False
     )
-    stage_ids = [id_tuple[0] for id_tuple in stages_ids_query.all()]
+    if not objects_query.first():
+        return {"data": [{"unknown": {"left_average": 0, "right_average": 0, "average": 0,
+                "left_standard_deviation": 0, "right_standard_deviation": 0,
+                                      "standard_deviation": 0, "chart_url": f"/dashboard/step_difference/{action_id}"}}], "message": "No objects found for the given action_id."}
+    objects = list(objects_query.all())
+    for obj in objects:
+        step_difference = []
+        left_step_difference = []
+        right_step_difference = []
 
-    if not stage_ids:
-        return {"average": 0, "standard_deviation": 0,
-                "chart_url": f"/dashboard/step_difference/{action_id}"}
+        stages_ids_query = session.query(Stage.id).filter(
+            Stage.object_id == obj.id, Stage.is_deleted == False
+        )
+        stage_ids = [id_tuple[0] for id_tuple in stages_ids_query.all()]
 
-    steps_info_query = session.query(StepsInfo).filter(
-        StepsInfo.stage_id.in_(stage_ids),
-        StepsInfo.is_deleted == False,
-        StepsInfo.first_step == False
-    )
+        if not stage_ids:
+            continue
 
-    for step_info in steps_info_query.all():
-        if step_info.steps_diff is not None:
-            if step_info.front_leg == "left":
-                left_step_difference.append(step_info.steps_diff)
-            elif step_info.front_leg == "right":
-                right_step_difference.append(step_info.steps_diff)
-            step_difference.append(step_info.steps_diff)
+        steps_info_query = session.query(StepsInfo).filter(
+            StepsInfo.stage_id.in_(stage_ids),
+            StepsInfo.is_deleted == False,
+            StepsInfo.first_step == False
+        )
 
-    average, standard_deviation = calculate_stats(step_difference)
-    left_average, left_standard_deviation = calculate_stats(
-        left_step_difference)
-    right_average, right_standard_deviation = calculate_stats(
-        right_step_difference)
-    left_min_value = min(left_step_difference, default=0)
-    left_max_value = max(left_step_difference, default=0)
-    right_min_value = min(right_step_difference, default=0)
-    right_max_value = max(right_step_difference, default=0)
-    min_value = min(step_difference, default=0)
-    max_value = max(step_difference, default=0)
+        for step_info in steps_info_query.all():
+            if step_info.steps_diff is not None:
+                if step_info.front_leg == "left":
+                    left_step_difference.append(step_info.steps_diff)
+                elif step_info.front_leg == "right":
+                    right_step_difference.append(step_info.steps_diff)
+                step_difference.append(step_info.steps_diff)
 
-    return {
-        "left_average": left_average,
-        "right_average": right_average,
-        "average": average,
-        "left_standard_deviation": left_standard_deviation,
-        "right_standard_deviation": right_standard_deviation,
-        "standard_deviation": standard_deviation,
-        "left_min_value": left_min_value,
-        "left_max_value": left_max_value,
-        "right_min_value": right_min_value,
-        "right_max_value": right_max_value,
-        "min_value": min_value,
-        "max_value": max_value,
-        "chart_url": f"/dashboard/step_difference/{action_id}"
-    }
+        average, standard_deviation = calculate_stats(step_difference)
+        left_average, left_standard_deviation = calculate_stats(
+            left_step_difference)
+        right_average, right_standard_deviation = calculate_stats(
+            right_step_difference)
+        left_min_value = min(left_step_difference, default=0)
+        left_max_value = max(left_step_difference, default=0)
+        right_min_value = min(right_step_difference, default=0)
+        right_max_value = max(right_step_difference, default=0)
+        min_value = min(step_difference, default=0)
+        max_value = max(step_difference, default=0)
+
+        final_results.append({obj.name: {
+            "left_average": left_average,
+            "right_average": right_average,
+            "average": average,
+            "left_standard_deviation": left_standard_deviation,
+            "right_standard_deviation": right_standard_deviation,
+            "standard_deviation": standard_deviation,
+            "left_min_value": left_min_value,
+            "left_max_value": left_max_value,
+            "right_min_value": right_min_value,
+            "right_max_value": right_max_value,
+            "min_value": min_value,
+            "max_value": max_value,
+            "chart_url": f"/dashboard/step_difference/{action_id}/{obj.id}"
+        }})
+    return {"data": final_results, "message": "Success"}
 
 
 @router.get("/support_time/{action_id}")
 def get_average_support_time(action_id: int, session: SessionDep = SessionDep):
-    left_support_time = []
-    right_support_time = []
-    support_time = []
-
-    stages_ids_query = session.query(Stage.id).filter(
-        Stage.action_id == action_id, Stage.is_deleted == False
+    final_results = []
+    objects_query = session.query(Objects).filter(
+        Objects.action_id == action_id, Objects.is_deleted == False
     )
-    stage_ids = [id_tuple[0] for id_tuple in stages_ids_query.all()]
-
-    if not stage_ids:
-        return {"left_average": 0, "right_average": 0, "average": 0,
+    if not objects_query.first():
+        return {"data": [{"unknown": {"left_average": 0, "right_average": 0, "average": 0,
                 "left_standard_deviation": 0, "right_standard_deviation": 0,
-                "standard_deviation": 0, "chart_url": f"/dashboard/support_time/{action_id}"}
+                                      "standard_deviation": 0, "chart_url": f"/dashboard/support_time/{action_id}"}}], "message": "No objects found for the given action_id."}
+    objects = list(objects_query.all())
+    for obj in objects:
+        left_support_time = []
+        right_support_time = []
+        support_time = []
 
-    steps_info_query = session.query(StepsInfo).filter(
-        StepsInfo.stage_id.in_(stage_ids),
-        StepsInfo.is_deleted == False
-    )
+        stages_ids_query = session.query(Stage.id).filter(
+            Stage.object_id == obj.id, Stage.is_deleted == False
+        )
+        stage_ids = [id_tuple[0] for id_tuple in stages_ids_query.all()]
 
-    for step_info in steps_info_query.all():
-        if step_info.support_time is not None:  # Check for None
-            if step_info.front_leg == "left":
-                left_support_time.append(step_info.support_time)
-            elif step_info.front_leg == "right":
-                right_support_time.append(step_info.support_time)
-            support_time.append(step_info.support_time)
+        if not stage_ids:
+            continue
 
-    left_average, left_standard_deviation = calculate_stats(left_support_time)
-    right_average, right_standard_deviation = calculate_stats(
-        right_support_time)
-    average, standard_deviation = calculate_stats(support_time)
-    left_min_value = min(left_support_time, default=0)
-    left_max_value = max(left_support_time, default=0)
-    right_min_value = min(right_support_time, default=0)
-    right_max_value = max(right_support_time, default=0)
-    min_value = min(support_time, default=0)
-    max_value = max(support_time, default=0)
+        steps_info_query = session.query(StepsInfo).filter(
+            StepsInfo.stage_id.in_(stage_ids),
+            StepsInfo.is_deleted == False
+        )
 
-    return {
-        "left_average": left_average,
-        "right_average": right_average,
-        "average": average,
-        "left_standard_deviation": left_standard_deviation,
-        "right_standard_deviation": right_standard_deviation,
-        "standard_deviation": standard_deviation,
-        "left_min_value": left_min_value,
-        "left_max_value": left_max_value,
-        "right_min_value": right_min_value,
-        "right_max_value": right_max_value,
-        "min_value": min_value,
-        "max_value": max_value,
-        "chart_url": f"/dashboard/support_time/{action_id}"
-    }
+        for step_info in steps_info_query.all():
+            if step_info.support_time is not None:  # Check for None
+                if step_info.front_leg == "left":
+                    left_support_time.append(step_info.support_time)
+                elif step_info.front_leg == "right":
+                    right_support_time.append(step_info.support_time)
+                support_time.append(step_info.support_time)
+
+        left_average, left_standard_deviation = calculate_stats(
+            left_support_time)
+        right_average, right_standard_deviation = calculate_stats(
+            right_support_time)
+        average, standard_deviation = calculate_stats(support_time)
+        left_min_value = min(left_support_time, default=0)
+        left_max_value = max(left_support_time, default=0)
+        right_min_value = min(right_support_time, default=0)
+        right_max_value = max(right_support_time, default=0)
+        min_value = min(support_time, default=0)
+        max_value = max(support_time, default=0)
+
+        final_results.append({obj.name: {
+            "left_average": left_average,
+            "right_average": right_average,
+            "average": average,
+            "left_standard_deviation": left_standard_deviation,
+            "right_standard_deviation": right_standard_deviation,
+            "standard_deviation": standard_deviation,
+            "left_min_value": left_min_value,
+            "left_max_value": left_max_value,
+            "right_min_value": right_min_value,
+            "right_max_value": right_max_value,
+            "min_value": min_value,
+            "max_value": max_value,
+            "chart_url": f"/dashboard/support_time/{action_id}/{obj.id}"
+        }})
+    return {"data": final_results, "message": "Success"}
 
 
 @router.get("/liftoff_height/{action_id}")
 def get_average_liftoff_height(action_id: int, session: SessionDep = SessionDep):
-    left_liftoff_height = []
-    right_liftoff_height = []
-    liftoff_height = []
-
-    stages_ids_query = session.query(Stage.id).filter(
-        Stage.action_id == action_id, Stage.is_deleted == False
+    final_results = []
+    objects_query = session.query(Objects).filter(
+        Objects.action_id == action_id, Objects.is_deleted == False
     )
-    stage_ids = [id_tuple[0] for id_tuple in stages_ids_query.all()]
-
-    if not stage_ids:
-        return {"left_average": 0, "right_average": 0, "average": 0,
+    if not objects_query.first():
+        return {"data": [{"unknown": {"left_average": 0, "right_average": 0, "average": 0,
                 "left_standard_deviation": 0, "right_standard_deviation": 0,
-                "standard_deviation": 0, "chart_url": f"/dashboard/liftoff_height/{action_id}"}
+                                      "standard_deviation": 0, "chart_url": f"/dashboard/liftoff_height/{action_id}"}}], "message": "No objects found for the given action_id."}
+    objects = list(objects_query.all())
+    for obj in objects:
+        left_liftoff_height = []
+        right_liftoff_height = []
+        liftoff_height = []
 
-    steps_info_query = session.query(StepsInfo).filter(
-        StepsInfo.stage_id.in_(stage_ids),
-        StepsInfo.is_deleted == False
-    )
+        stages_ids_query = session.query(Stage.id).filter(
+            Stage.object_id == obj.id, Stage.is_deleted == False
+        )
+        stage_ids = [id_tuple[0] for id_tuple in stages_ids_query.all()]
 
-    for step_info in steps_info_query.all():
-        if step_info.liftoff_height is not None:
-            if step_info.front_leg == "left":
-                left_liftoff_height.append(step_info.liftoff_height)
-            elif step_info.front_leg == "right":
-                right_liftoff_height.append(step_info.liftoff_height)
-            liftoff_height.append(step_info.liftoff_height)
+        if not stage_ids:
+            continue
 
-    left_average, left_standard_deviation = calculate_stats(
-        left_liftoff_height)
-    right_average, right_standard_deviation = calculate_stats(
-        right_liftoff_height)
-    average, standard_deviation = calculate_stats(liftoff_height)
-    left_min_value = min(left_liftoff_height, default=0)
-    left_max_value = max(left_liftoff_height, default=0)
-    right_min_value = min(right_liftoff_height, default=0)
-    right_max_value = max(right_liftoff_height, default=0)
-    min_value = min(liftoff_height, default=0)
-    max_value = max(liftoff_height, default=0)
+        steps_info_query = session.query(StepsInfo).filter(
+            StepsInfo.stage_id.in_(stage_ids),
+            StepsInfo.is_deleted == False
+        )
 
-    return {
-        "left_average": left_average,
-        "right_average": right_average,
-        "average": average,
-        "left_standard_deviation": left_standard_deviation,
-        "right_standard_deviation": right_standard_deviation,
-        "standard_deviation": standard_deviation,
-        "left_min_value": left_min_value,
-        "left_max_value": left_max_value,
-        "right_min_value": right_min_value,
-        "right_max_value": right_max_value,
-        "min_value": min_value,
-        "max_value": max_value,
-        "chart_url": f"/dashboard/liftoff_height/{action_id}"
-    }
+        for step_info in steps_info_query.all():
+            if step_info.liftoff_height is not None:
+                if step_info.front_leg == "left":
+                    left_liftoff_height.append(step_info.liftoff_height)
+                elif step_info.front_leg == "right":
+                    right_liftoff_height.append(step_info.liftoff_height)
+                liftoff_height.append(step_info.liftoff_height)
+
+        left_average, left_standard_deviation = calculate_stats(
+            left_liftoff_height)
+        right_average, right_standard_deviation = calculate_stats(
+            right_liftoff_height)
+        average, standard_deviation = calculate_stats(liftoff_height)
+        left_min_value = min(left_liftoff_height, default=0)
+        left_max_value = max(left_liftoff_height, default=0)
+        right_min_value = min(right_liftoff_height, default=0)
+        right_max_value = max(right_liftoff_height, default=0)
+        min_value = min(liftoff_height, default=0)
+        max_value = max(liftoff_height, default=0)
+
+        final_results.append({obj.name: {
+            "left_average": left_average,
+            "right_average": right_average,
+            "average": average,
+            "left_standard_deviation": left_standard_deviation,
+            "right_standard_deviation": right_standard_deviation,
+            "standard_deviation": standard_deviation,
+            "left_min_value": left_min_value,
+            "left_max_value": left_max_value,
+            "right_min_value": right_min_value,
+            "right_max_value": right_max_value,
+            "min_value": min_value,
+            "max_value": max_value,
+            "chart_url": f"/dashboard/liftoff_height/{action_id}/{obj.id}"
+        }})
+    return {"data": final_results, "message": "Success"}

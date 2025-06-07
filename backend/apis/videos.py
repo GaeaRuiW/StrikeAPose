@@ -9,7 +9,7 @@ from config import video_dir
 from fastapi import APIRouter, Body, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
 from models import (Action, Doctors, Patients, SessionDep, Stage, StepsInfo,
-                    VideoPath)
+                    VideoPath, Objects)
 from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
 
@@ -28,6 +28,11 @@ class UpdateNotes(BaseModel):
     patient_id: int
     notes: str
 
+class InsertInferenceVideo(BaseModel):
+    action_id: int
+    object_name: str
+    video_path: str
+
 
 @router.delete("/delete_video")
 def delete_video(video: DeleteVideo = Body(...), session: SessionDep = SessionDep):
@@ -43,42 +48,61 @@ def delete_video(video: DeleteVideo = Body(...), session: SessionDep = SessionDe
     else:
         video_ = session.query(VideoPath).filter(VideoPath.id == video.video_id,
                                                  VideoPath.is_deleted == False, VideoPath.patient_id == video.patient_id).first()
-    if not video_:
-        return {"message": "Video not found"}
-    action_id = video_.action_id
-    if not action_id:
-        # session.delete(video_)
-        video_.is_deleted = True
-        session.commit()
-        return {"message": "Video deleted successfully"}
-    all_videos = session.query(VideoPath).filter(
-        VideoPath.action_id == action_id, VideoPath.is_deleted == False).all()
-    for video_ in all_videos:
-        # video_path = video_.video_path
-        # if os.path.exists(video_path):
-        #     print(f"Deleting video: {video_path}")
-        #     os.remove(video_path)
-        # if os.path.exists(video_path.replace("mp4", "json")):
-        #     print(f"Deleting json: {video_path.replace('mp4', 'json')}")
-        #     os.remove(video_path.replace("mp4", "json"))
-        # session.delete(video_)
-        video_.is_deleted = True
-
+        if not video_:
+            return {"message": "Video not found"}
+    # object_id = video_.object_id
+    # if not object_id:
+    #     # session.delete(video_)
+    #     video_.is_deleted = True
+    #     session.commit()
+    #     return {"message": "Video deleted successfully"}
+    # all_videos = session.query(VideoPath).filter(
+    #     VideoPath.action_id == action_id, VideoPath.is_deleted == False).all()
+    # for video_ in all_videos:
+    #     # video_path = video_.video_path
+    #     # if os.path.exists(video_path):
+    #     #     print(f"Deleting video: {video_path}")
+    #     #     os.remove(video_path)
+    #     # if os.path.exists(video_path.replace("mp4", "json")):
+    #     #     print(f"Deleting json: {video_path.replace('mp4', 'json')}")
+    #     #     os.remove(video_path.replace("mp4", "json"))
+    #     # session.delete(video_)
+    #     video_.is_deleted = True
+    current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     all_actions = session.query(Action).filter(
         Action.original_video_id == video_.id, Action.is_deleted == False).all()
-    all_parent_actions = session.query(Action).filter(
-        Action.parent_id == action_id, Action.is_deleted == False).all()
-    all_actions.extend(all_parent_actions)
     for action_ in all_actions:
-        all_stages = session.query(Stage).filter(
-            Stage.action_id == action_id, Stage.is_deleted == False).all()
-        for stage_ in all_stages:
-            steps = session.query(StepsInfo).filter(
-                StepsInfo.stage_id == stage_.id, StepsInfo.is_deleted == False).all()
-            for step in steps:
-                step.is_deleted = True
-            stage_.is_deleted = True
+        objects = session.query(Objects).filter(
+            Objects.action_id == action_.id, Objects.is_deleted == False).all()
+        for object_ in objects:
+            all_inference_videos = session.query(VideoPath).filter(
+                VideoPath.object_id == object_.id, VideoPath.inference_video == True, VideoPath.is_deleted == False).all()
+            for v in all_inference_videos:
+                # video_path = video_.video_path
+                # if os.path.exists(video_path):
+                #     print(f"Deleting inference video: {video_path}")
+                #     os.remove(video_path)
+                # if os.path.exists(video_path.replace("mp4", "json")):
+                #     print(f"Deleting inference json: {video_path.replace('mp4', 'json')}")
+                #     os.remove(video_path.replace("mp4", "json"))
+                v.is_deleted = True
+                v.update_time = current_time
+            all_stages = session.query(Stage).filter(
+                Stage.object_id == object_.id, Stage.is_deleted == False).all()
+            for stage_ in all_stages:
+                steps = session.query(StepsInfo).filter(
+                    StepsInfo.stage_id == stage_.id, StepsInfo.is_deleted == False).all()
+                for step in steps:
+                    step.is_deleted = True
+                    step.update_time = current_time
+                stage_.is_deleted = True
+                stage_.update_time = current_time
+            object_.is_deleted = True
+            object_.update_time = current_time
         action_.is_deleted = True
+        action_.update_time = current_time
+    video_.is_deleted = True
+    video_.update_time = current_time
 
             #         session.delete(step)
             #     session.delete(stage_)
@@ -338,19 +362,24 @@ def get_video_by_id(video_id: int, session: SessionDep = SessionDep):
     return video.to_dict() if video else {"message": "Video not found"}
 
 
-@router.post("/insert_inference_video/{action_id}")
-def insert_inference_video(action_id: int, session: SessionDep = SessionDep):
-    video = session.query(VideoPath).filter(
-        VideoPath.action_id == action_id, VideoPath.is_deleted == False).first()
-    if not video:
-        return {"message": "Video not found"}
-    new_video_path = video.video_path.replace("original", "inference")
-    new_video_path = f"{os.path.dirname(new_video_path)}/{action_id}-{os.path.basename(new_video_path)}"
-    new_video = VideoPath(video_path=new_video_path, patient_id=video.patient_id, original_video=False, inference_video=True, is_deleted=False, action_id=action_id, notes=None,
-                          create_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"), update_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+@router.post("/insert_inference_video")
+def insert_inference_video(data: InsertInferenceVideo = Body(...), session: SessionDep = SessionDep):
+    action = session.query(Action).filter(
+        Action.id == data.action_id, Action.is_deleted == False).first()
+    if not action:
+        return {"message": "Action not found"}
+    object_ = Objects(action_id=data.action_id, create_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                      update_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"), is_deleted=False, name=data.object_name)
+    session.add(object_)
+    session.commit()
+    session.refresh(object_)
+    object_id = object_.id
+    new_video_path = f"{os.path.dirname(data.video_path)}/{data.action_id}-{os.path.basename(data.video_path)}"
+    new_video = VideoPath(video_path=new_video_path, patient_id=action.patient_id, original_video=False, inference_video=True, is_deleted=False, notes=None,
+                          create_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"), update_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"), object_id=object_id)
     session.add(new_video)
     session.commit()
-    return {"message": "Inference video inserted successfully", "video_id": new_video.id}
+    return {"message": "Inference video inserted successfully", "video_id": new_video.id, "object_id": object_id}
 
 
 @router.patch("/notes")

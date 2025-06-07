@@ -7,6 +7,7 @@ from models.steps_info import StepsInfo
 from models.patients import Patients
 from models.doctors import Doctors
 from models.video_path import VideoPath
+from models.objects import Objects
 from sqlmodel import Session, SQLModel, create_engine
 from typing_extensions import Annotated
 

@@ -52,7 +52,7 @@ services:
   core:
     build:
       context: .
-      dockerfile: ./core/Dockerfile
+      dockerfile: ./code/Dockerfile
     ports:
       - "8001:8001"
     environment:
@@ -69,7 +69,7 @@ services:
     runtime: nvidia
     volumes:
       - /data/pose/videos:/data/videos
-      - ./core:/workspace
+      - ./code:/workspace
     command: python app.py
   db:
     image: postgres:14

@@ -28,11 +28,15 @@ class LoginModel(BaseModel):
     username: str
     password: str
 
+
 class DeleteDoctorModel(BaseModel):
     password: str
 
+
 @router.post("/register")
 def register_doctor(doctor: CreateDoctorModel = Body(..., embed=True), session: SessionDep = SessionDep):
+    if session.query(Doctors).filter(Doctors.email == doctor.email, Doctors.is_deleted == False).first():
+        return {"message": "Email already registered"}, 400
     doctor = Doctors(username=doctor.username, password=hash_password(
         doctor.password), email=doctor.email, phone=doctor.phone, create_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"), update_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"), is_deleted=False, department=doctor.department)
     session.add(doctor)
@@ -89,6 +93,13 @@ def get_doctor_by_name(name: str, session: SessionDep = SessionDep):
     return doctor.to_dict() if doctor else {"message": "Doctor not found"}
 
 
+@router.get("/get_doctor_by_email/{email}")
+def get_doctor_by_email(email: str, session: SessionDep = SessionDep):
+    doctor = session.query(Doctors).filter(
+        Doctors.email == email, Doctors.is_deleted == False).first()
+    return doctor.to_dict() if doctor else {"message": "Doctor not found"}
+
+
 @router.post("/login")
 def login_doctor(doctor_model: LoginModel = Body(..., embed=True), session: SessionDep = SessionDep):
     if (
@@ -97,7 +108,8 @@ def login_doctor(doctor_model: LoginModel = Body(..., embed=True), session: Sess
         .first()
     ):
         return (
-            {"message": "Login successful", "doctor": doctor.to_dict()} if check_password(doctor_model.password, doctor.password) else {"message": "Invalid password"}
+            {"message": "Login successful", "doctor": doctor.to_dict()} if check_password(
+                doctor_model.password, doctor.password) else {"message": "Invalid password"}
         )
     else:
         return {"message": "Doctor not found"}
