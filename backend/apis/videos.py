@@ -180,7 +180,7 @@ async def upload_video(patient_id: int, video: UploadFile = File(...), session: 
             original_video=True,
             inference_video=False,
             is_deleted=False,
-            notes="步态分析",
+            notes="拍摄视频",
             create_time=current_time,
             update_time=current_time
         )
@@ -243,9 +243,10 @@ def get_video(video_type: str, patient_id: int, video_id: int, session: SessionD
 
 
 @router.get("/stream/{video_type}/{patient_id}/{video_id}")
-def stream_video(video_type: str, patient_id: int, video_id: int, session: SessionDep = SessionDep, request: Request = None):
+def stream_video(video_type: str, patient_id: int, video_id: int, session: SessionDep = SessionDep):
     if video_type not in ["original", "inference"]:
-        return {"message": "Invalid video type"}
+        raise HTTPException(status_code=400, detail="Invalid video type")
+
     video = session.query(VideoPath).filter(
         VideoPath.id == video_id,
         VideoPath.patient_id == patient_id,
@@ -255,32 +256,18 @@ def stream_video(video_type: str, patient_id: int, video_id: int, session: Sessi
     ).first()
 
     if not video:
-        return {"message": "Video not found"}
+        raise HTTPException(status_code=404, detail="Video not found")
 
     video_path = video.video_path
-    file_size = os.path.getsize(video_path)
+    if not os.path.isfile(video_path):
+        raise HTTPException(
+            status_code=404, detail="Video file not found on server.")
 
-    if range_header := request.headers.get("range", None):
-        start, end = range_header.replace("bytes=", "").split("-")
-        start = int(start)
-        end = int(end) if end else file_size - 1
-        chunk_size = end - start + 1
-
-        def iter_file():
-            with open(video_path, "rb") as f:
-                f.seek(start)
-                while chunk := f.read(chunk_size):
-                    yield chunk
-
-        headers = {
-            "Content-Range": f"bytes {start}-{end}/{file_size}",
-            "Accept-Ranges": "bytes",
-            "Content-Type": "video/mp4",
-        }
-
-        return StreamingResponse(iter_file(), status_code=206, headers=headers)
-
-    return StreamingResponse(open(video_path, "rb"), media_type="video/mp4")
+    return FileResponse(
+        path=video_path,
+        media_type="video/mp4",
+        filename=os.path.basename(video_path)
+    )
 
 
 @router.get("/thumbnail_image/{video_type}/{patient_id}/{video_id}")

@@ -1,5 +1,11 @@
 import numpy as np
 from collections import defaultdict
+import json
+
+def default_serializer(obj):
+    if isinstance(obj, np.float32):
+        return float(obj)
+    raise TypeError(f"Object of type {obj.__class__.__name__} is not JSON serializable")
 
 # 计算角度
 def calculate_angle(a, b, c):
@@ -26,8 +32,7 @@ def calculate_angle(a, b, c):
     return angle_deg
 
 # 计算步态参数
-def calculate_gait_parameters(left_points, right_points, smoothed_data, left_turn, right_turn, fps=24.0):
-    print(left_turn,right_turn)
+def calculate_gait_parameters(left_points, right_points, smoothed_data, left_turn, right_turn):
     # 构造步骤列表
     left_steps = []
     for lp in left_points:
@@ -97,6 +102,8 @@ def calculate_gait_parameters(left_points, right_points, smoothed_data, left_tur
     last_right_stride_x = None  # 用于同侧步幅计算
     last_left_land_x = None   # 用于对侧步长计算
     last_right_land_x = None  # 用于对侧步长计算
+    last_right_land_y = None  # 用于对侧步长计算
+    last_left_land_y = None  # 用于对侧步长计算
     steps_info = []
     prev_step_info = None  # 跟踪前一步的step_info
     pre_step_length = None
@@ -179,9 +186,6 @@ def calculate_gait_parameters(left_points, right_points, smoothed_data, left_tur
         if ankle_ys:
             max_y = max(ankle_ys)
             min_y = min(ankle_ys)
-            print ("ankle_ys:",ankle_ys)
-            print("max:",max_y)
-            print("min:",min_y)
             liftoff_height = (max_y - min_y)
         else:
             liftoff_height = 0
@@ -190,17 +194,22 @@ def calculate_gait_parameters(left_points, right_points, smoothed_data, left_tur
         angles = []
         for d in frames_in_step:
             if leg == 'left':
-                a = (d['left_shoulder'][0], d['left_shoulder'][1])
+                #a = (d['left_shoulder'][0], d['left_shoulder'][1])
+                a = (d['left_hip'][0], d['left_hip'][1] + 100)
                 b = (d['left_hip'][0], d['left_hip'][1])
                 c = (d['left_knee'][0], d['left_knee'][1])
             else:
-                a = (d['right_shoulder'][0], d['right_shoulder'][1])
+                # a = (d['right_shoulder'][0], d['right_shoulder'][1])
+                a = (d['right_hip'][0], d['right_hip'][1] + 100)
                 b = (d['right_hip'][0], d['right_hip'][1])
                 c = (d['right_knee'][0], d['right_knee'][1])
-            angle = calculate_angle(a, b, c)
+            if b[0] < c[0]:  # 确保b在c的左侧
+                angle = -calculate_angle(a, b, c)
+            else:  # 确保b在c的右侧
+                angle = calculate_angle(a, b, c)
             angles.append(angle)
-        hip_min = np.min(angles) if angles else 0
-        hip_max = np.max(angles) if angles else 0
+        hip_min = abs(np.min(angles) if angles else 0)
+        hip_max = abs(np.max(angles) if angles else 0)
         
         # 判断第一步
         first_step = (i == 1)
@@ -224,17 +233,31 @@ def calculate_gait_parameters(left_points, right_points, smoothed_data, left_tur
             'stride_length': stride_length
         }
 
-        '''
-        # 如果存在前一步，计算并更新前一步的步长差
-        if prev_step_info is not None:
-            steps_diff = abs(current_step_length - prev_step_info['step_length'])
-            prev_step_info['steps_diff'] = steps_diff
-        '''
+
         steps_info.append(step_info)
-        # prev_step_info = step_info  # 更新前一步为当前步骤
-        
     
-    # steps_info = steps_info[1:-1]
+    origin_result = {
+        "stage_n": 1,
+        "start_frame": steps_info[0]['start_frame'] if steps_info else 0,
+        "end_frame": steps_info[-1]['end_frame'] if steps_info else 0,
+        "steps_info": steps_info
+    }
+    '''
+    with open('data/origin_out.json', 'w') as f:
+        json.dump(origin_result, f, indent=4, default=default_serializer)
+    ''' 
+    
+    min_stride_length = 0
+    # 临时存储过滤后的步骤信息
+    filtered_steps_temp = []
+
+    for step_info in steps_info:
+        # 如果步幅大于或等于最小步幅，则保留该步骤
+        if step_info['stride_length'] >= min_stride_length:
+            filtered_steps_temp.append(step_info)
+
+    # 更新过滤后的步骤信息
+    steps_info = filtered_steps_temp
 
     # 过滤转身脚步
     if left_turn or right_turn:
@@ -289,8 +312,3 @@ def calculate_gait_parameters(left_points, right_points, smoothed_data, left_tur
         "end_frame": steps_info[-1]['end_frame'] if steps_info else 0,
         "steps_info": steps_info
     }]
-
-def default_serializer(obj):
-    if isinstance(obj, np.float32):
-        return float(obj)
-    raise TypeError(f"Object of type {obj.__class__.__name__} is not JSON serializable")

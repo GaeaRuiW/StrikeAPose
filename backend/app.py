@@ -14,7 +14,7 @@ from fastapi.responses import JSONResponse
 from models import Roles, create_db_and_tables
 from sqlmodel import Session, create_engine
 
-app = FastAPI()
+app = FastAPI(doc_url=None)
 
 app.include_router(action_router, prefix="/api/v1", tags=["actions"])
 app.include_router(dashboard_router, prefix="/api/v1", tags=["dashboard"])

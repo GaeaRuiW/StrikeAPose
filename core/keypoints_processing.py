@@ -17,33 +17,6 @@ def default_serializer(obj):
     # 否则抛出异常，提示对象不可序列化
     raise TypeError(f"Object of type {obj.__class__.__name__} is not JSON serializable")
 
-# 用于计算数组中非零元素的最大值和最小值的差值
-def diff_non_zero(arr):
-    # 使用列表推导式，将数组中非零的元素存入列表
-    non_zero_values = [i for i in arr if i != 0]
-    # 如果列表不为空，则返回最大值和最小值的差值，否则返回0
-    return max(non_zero_values) - min(non_zero_values) if non_zero_values else 0
-
-# 用于对一组点进行排序
-def sort_points(points):
-    # 按照x坐标对点进行排序
-    points_sorted_by_x = sorted(points, key=lambda p: p[0])
-    # 取出排序后的前两个点
-    x_first_two = points_sorted_by_x[:2]
-    # 取出排序后的后两个点
-    x_last_two = points_sorted_by_x[2:]
-    # 对前两个点按照y坐标进行排序
-    x_first_two_sorted = sorted(x_first_two, key=lambda p: p[1])
-    # 对后两个点按照y坐标进行排序
-    x_last_two_sorted = sorted(x_last_two, key=lambda p: p[1])
-    # 返回排序后的四个点
-    return [x_first_two_sorted[0], x_last_two_sorted[0], x_first_two_sorted[1], x_last_two_sorted[1]]
-
-# 用于获取图像的特征点
-def get_featurepoints2(image0):
-    # 返回一个布尔值和空列表
-    return False, []
-
 # 用于对一组数据进行平滑处理
 def smooth_data(data, window_size):
     # 定义一个空列表，用于存储平滑后的数据
@@ -101,15 +74,44 @@ def smooth_data(data, window_size):
             'left_ankle_z': smoothed_left_ankle_z,
             'right_ankle_z': smoothed_right_ankle_z
         })
+    
+    '''
+    # 绘制右脚曲线
+    times = [d['time'] for d in smoothed_data]
+    right_ankle_x = [d['right_ankle'][0] for d in smoothed_data]
+    plt.figure(figsize=(12, 6))
+    plt.plot(times, right_ankle_x, label='Right Coordinates', color='red')
+
+    plt.title('Right Ankle X Coordinates')
+    plt.xlabel('Time (s)')
+    plt.ylabel('X Coordinate')
+    plt.legend()
+    plt.grid(True)
+    plt.savefig('data/right Ankle X Coordinates.png')
+    plt.close()
+
+    # 绘制左脚曲线
+    left_ankle_x = [d['left_ankle'][0] for d in smoothed_data]
+    plt.figure(figsize=(12, 6))
+    plt.plot(times, left_ankle_x, label='Left Coordinates', color='red')
+
+    plt.title('Left Ankle X Coordinates')
+    plt.xlabel('Time (s)')
+    plt.ylabel('X Coordinate')
+    plt.legend()
+    plt.grid(True)
+    plt.savefig('data/Left Ankle X Coordinates.png')
+    plt.close()
+    '''
     # 返回平滑后的数据
     return smoothed_data
 
 # 用于计算速度
-def calculate_speed(data, fps=24.0):
+def calculate_speed(data, fps=30.0):
     # 对数据进行排序
     data.sort(key=lambda x: x['time'])
     # 设置窗口大小
-    window_size = 7
+    window_size = 17
     # 对数据进行平滑处理
     smoothed_data = smooth_data(data, window_size)
     
@@ -148,39 +150,138 @@ def calculate_speed(data, fps=24.0):
             right_speed[i] = dx_right / delta_t
 
     # 使用Savitzky-Golay滤波器平滑速度曲线
-    left_speed = savgol_filter(left_speed, window_length=5, polyorder=2)
-    right_speed = savgol_filter(right_speed, window_length=5, polyorder=2)
+    left_speed = savgol_filter(left_speed, window_length=17, polyorder=2)
+    right_speed = savgol_filter(right_speed, window_length=17, polyorder=2)
+    '''
+    # 绘制右脚速度曲线
+    plt.figure(figsize=(12, 6))
+    plt.plot(times, right_speed, label='Right Speed', color='red')
+
+    plt.title('Right Ankle Speed')
+    plt.xlabel('Time (s)')
+    plt.ylabel('Speed')
+    plt.legend()
+    plt.grid(True)
+    plt.savefig('data/right Speed.png')
+    plt.close()
+
+    # 绘制左脚速度曲线
+    plt.figure(figsize=(12, 6))
+    plt.plot(times, left_speed, label='Left Speed', color='red')
+
+    plt.title('Left Ankle Speed')
+    plt.xlabel('Time (s)')
+    plt.ylabel('Speed')
+    plt.legend()
+    plt.grid(True)
+    plt.savefig('data/Left Speed.png')
+    plt.close()
+    '''    
 
     # 返回时间序列、左右脚速度和平滑后的数据
     return times, left_speed, right_speed, smoothed_data
 
 # 用于找到波峰和步态点
 def find_peaks_and_gait_points(times, left_speed, right_speed, smoothed_data, out_file, y_scale, z_x_scale):
-    # 找到波峰（正向波峰）
-    left_peaks_indices, _ = find_peaks(left_speed, prominence=1, distance=12)
-    right_peaks_indices, _ = find_peaks(right_speed, prominence=1, distance=12)
-    
+    prominence = 0.3
+    height = 0.15
+    fps=30
     left_turn = None
     right_turn = None
-
+    
+    # 步骤1：检测原始波峰（正数据段）
+    left_peaks_indices, _ = find_peaks(left_speed, prominence=prominence, distance=12, height=height)
+    right_peaks_indices, _ = find_peaks(right_speed, prominence=prominence, distance=12, height=height)
+    
     if np.any(left_speed < -0.4) or np.any(right_speed < -0.4):
-        # 速度取负，找到波峰（返程波峰）
-        n_left_peaks_indices, _ = find_peaks(-left_speed, prominence=1, distance=12)
-        n_right_peaks_indices, _ = find_peaks(-right_speed, prominence=1, distance=12)
 
-        left_turn = int(((left_peaks_indices[-1] + n_left_peaks_indices[0]) / 2))
-        left_p = left_speed[:left_turn]
-        left_n = -left_speed[left_turn:]
-        left_speed = np.concatenate((left_p, left_n))
+        # 步骤2：检测波谷（负数据段）
+        left_valleys_indices, _ = find_peaks(-left_speed, prominence=prominence, distance=12, height=height)
+        right_valleys_indices, _ = find_peaks(-right_speed, prominence=prominence, distance=12, height=height)
         
-        right_turn = int(((right_peaks_indices[-1] + n_right_peaks_indices[0]) / 2))
-        right_p = right_speed[:right_turn]
-        right_n = -right_speed[right_turn:]
-        right_speed = np.concatenate((right_p, right_n))
+        # 步骤3：组合波峰和波谷数据
+        left_peaks_valleys = sorted(set(left_peaks_indices) | set(left_valleys_indices))
+        right_peaks_valleys = sorted(set(right_peaks_indices) | set(right_valleys_indices))
+        
+        # 步骤4：找出连续同符号的数据段
+        def find_sign_changes(indices, speed):
+            segments = []
+            current_sign = None
+            start_idx = 0
+            
+            for i in range(len(speed)):
+                sign = 1 if speed[i] >= 0 else -1
+                
+                if current_sign is None:
+                    current_sign = sign
+                    start_idx = i
+                elif sign != current_sign:
+                    segments.append((start_idx, i-1, current_sign))
+                    current_sign = sign
+                    start_idx = i
+            
+            if current_sign is not None:
+                segments.append((start_idx, len(speed)-1, current_sign))
+            
+            return segments
+        
+        left_segments = find_sign_changes(left_peaks_valleys, left_speed)
+        right_segments = find_sign_changes(right_peaks_valleys, right_speed)
+        
+        # 步骤5：处理负数据段
+        def process_negative_segments(segments, speed):
+            new_speed = speed.copy()
+            turn_point = None
+            
+            for i, (start, end, sign) in enumerate(segments):
+                if sign == -1:  # 负数据段
+                    # 找前一个正数据段的最后一个点
+                    prev_pos_end = None
+                    for j in range(i-1, -1, -1):
+                        if segments[j][2] == 1:
+                            prev_pos_end = segments[j][1]
+                            break
+                    
+                    # 找后一个正数据段的第一个点
+                    next_pos_start = None
+                    for j in range(i+1, len(segments)):
+                        if segments[j][2] == 1:
+                            next_pos_start = segments[j][0]
+                            break
+                    
+                    # 计算起始点（负段第一个点和前一个正段最后一个点的平均）
+                    if prev_pos_end is not None:
+                        start_bound = int((start + prev_pos_end) / 2)
+                    else:
+                        start_bound = start
+                    
+                    # 计算结束点（负段最后一个点和后一个正段第一个点的平均）
+                    if next_pos_start is not None:
+                        end_bound = int((end + next_pos_start) / 2)
+                    else:
+                        end_bound = end
+                    
+                    # 记录第一个负段的起始点作为转身点
+                    if turn_point is None:
+                        turn_point = start_bound
+                    
+                    # 步骤6：将负段数据取正
+                    for j in range(start_bound, min(end_bound+1, len(new_speed))):
+                        new_speed[j] = -new_speed[j]
+            
+            return new_speed, turn_point
+        
+        # 步骤7：处理左右速度
+        left_speed, left_turn = process_negative_segments(left_segments, left_speed)
+        right_speed, right_turn = process_negative_segments(right_segments, right_speed)
+
+        # 步骤8：取转身时刻的第一个值作为left_turn和right_turn
+        left_turn = int(left_turn) if left_turn is not None else None
+        right_turn = int(right_turn) if right_turn is not None else None
 
     # 找到波峰
-    left_peaks_indices, _ = find_peaks(left_speed, prominence=1, distance=12)
-    right_peaks_indices, _ = find_peaks(right_speed, prominence=1, distance=12)
+    left_peaks_indices, _ = find_peaks(left_speed, prominence=prominence, distance=12, height=height)
+    right_peaks_indices, _ = find_peaks(right_speed, prominence=prominence, distance=12, height=height)
 
     left_peaks = [(times[i], left_speed[i]) for i in left_peaks_indices]
     right_peaks = [(times[i], right_speed[i]) for i in right_peaks_indices]
@@ -192,9 +293,9 @@ def find_peaks_and_gait_points(times, left_speed, right_speed, smoothed_data, ou
     left_min_indices, _ = find_peaks(-np.array(left_speed))
     right_min_indices, _ = find_peaks(-np.array(right_speed))
 
-    # 去除速度值大于0.5的波谷数据
-    left_min_indices = [i for i in left_min_indices if left_speed[i] <= 0.4]
-    right_min_indices = [i for i in right_min_indices if right_speed[i] <= 0.4]
+    # 去除速度值大于0.8的波谷数据
+    left_min_indices = [i for i in left_min_indices if left_speed[i] <= 0.8]
+    right_min_indices = [i for i in right_min_indices if right_speed[i] <= 0.8]
 
     left_points = []
     for i in range(len(filtered_left_peaks)):
@@ -206,8 +307,13 @@ def find_peaks_and_gait_points(times, left_speed, right_speed, smoothed_data, ou
         
         # 找到右侧最近的波谷
         l_land_mins = [m for m in left_min_indices if m > l_peak_index]
-        l_land_index = l_land_mins[0] if l_land_mins else len(left_speed)-1
-        
+        #l_land_index = l_land_mins[0] if l_land_mins else len(left_speed)-1
+        # 如果当前是最后一个波峰且右侧无波谷，取最后一个点
+        if i == len(filtered_left_peaks) - 1 and not l_land_mins:
+            l_land_index = len(left_speed) - 1
+        else:
+            l_land_index = l_land_mins[0] if l_land_mins else len(left_speed)-1
+
         l_lift_time = times[l_lift_index]
         l_land_time = times[l_land_index]
         
@@ -219,8 +325,8 @@ def find_peaks_and_gait_points(times, left_speed, right_speed, smoothed_data, ou
         l_land_ponit_x = smoothed_data[l_land_idx]['left_ankle'][0]
         l_land_ponit_y = smoothed_data[l_land_idx]['left_ankle'][1]
 
-        l_lift_ponit_frame = int(l_lift_time * 24)
-        l_land_ponit_frame = int(l_land_time * 24)
+        l_lift_ponit_frame = int(l_lift_time * fps)
+        l_land_ponit_frame = int(l_land_time * fps)
 
         left_points.append((l_lift_time, l_land_time, l_lift_ponit_x, l_lift_ponit_y, l_land_ponit_x, l_land_ponit_y, l_lift_ponit_frame, l_land_ponit_frame))
     
@@ -234,8 +340,13 @@ def find_peaks_and_gait_points(times, left_speed, right_speed, smoothed_data, ou
         
         # 找到右侧最近的波谷
         r_land_mins = [m for m in right_min_indices if m > r_peak_index]
-        r_land_index = r_land_mins[0] if r_land_mins else len(right_speed)-1
-        
+        #r_land_index = r_land_mins[0] if r_land_mins else len(right_speed)-1
+        # 如果当前是最后一个波峰且右侧无波谷，取最后一个点
+        if i == len(filtered_right_peaks) - 1 and not r_land_mins:
+            r_land_index = len(right_speed) - 1
+        else:
+            r_land_index = r_land_mins[0] if r_land_mins else len(right_speed)-1
+
         r_lift_time = times[r_lift_index]
         r_land_time = times[r_land_index]
         
@@ -247,8 +358,8 @@ def find_peaks_and_gait_points(times, left_speed, right_speed, smoothed_data, ou
         r_land_ponit_x = smoothed_data[r_land_idx]['right_ankle'][0]
         r_land_ponit_y = smoothed_data[r_land_idx]['right_ankle'][1]
 
-        r_lift_ponit_frame = int(r_lift_time * 24)
-        r_land_ponit_frame = int(r_land_time * 24)
+        r_lift_ponit_frame = int(r_lift_time * fps)
+        r_land_ponit_frame = int(r_land_time * fps)
 
         right_points.append((r_lift_time, r_land_time, r_lift_ponit_x, r_lift_ponit_y, r_land_ponit_x, r_land_ponit_y, r_lift_ponit_frame, r_land_ponit_frame))
 
@@ -295,10 +406,10 @@ def find_peaks_and_gait_points(times, left_speed, right_speed, smoothed_data, ou
     return left_peaks, right_peaks, left_points, right_points, filtered_left_peaks, filtered_right_peaks, result
 
 # 用于计算输出
-def caculate_output(key_points4, datas, out_file, M, fps=24.0):
+def caculate_output(key_points4, datas, out_file, M, fps=30.0):
     # 定义标定物的长度和宽度
-    box_len = 2.9
-    box_width = 0.84
+    box_len = 3
+    box_width = 0.5
 
     # 计算透视变换后的坐标范围
     transformed_points = cv2.perspectiveTransform(np.array([key_points4], dtype='float32'), M)[0]
