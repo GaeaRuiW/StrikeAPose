@@ -1,0 +1,19 @@
+{
+  "check_time": "2025-06-24T00:01:40.736904",
+  "status": "warning",
+  "warnings": [
+    "bili_ticket\u5c06\u57282.9\u5929\u5185\u8fc7\u671f"
+  ],
+  "expires": {
+    "bili_ticket": {
+      "timestamp": 1750948327,
+      "datetime": "2025-06-26T22:32:07",
+      "days_left": 2.937803972573192
+    },
+    "SESSDATA": {
+      "timestamp": 1766241188,
+      "datetime": "2025-12-20T22:33:08",
+      "days_left": 179.9385099910917
+    }
+  }
+}

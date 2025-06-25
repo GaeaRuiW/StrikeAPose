@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import List, Optional
-
-from common.utils import get_redis_connection
+from sqlalchemy import select
+from common.utils import async_redis_rpush, async_redis_lrem
 from fastapi import APIRouter, Body
 from models import Action, SessionDep, Stage, StepsInfo, VideoPath
 from pydantic import BaseModel
@@ -54,45 +54,54 @@ class UpdateActionProgress(BaseModel):
 
 
 router = APIRouter(tags=["actions"], prefix="/actions")
-redis_conn = get_redis_connection()
+# redis_conn = get_redis_connection()
 
 
 @router.post("/")
 async def create_action(action: CreateAction = Body(...), session: SessionDep = SessionDep):
-    video = session.query(VideoPath).filter(VideoPath.id == action.video_id,
-                                            VideoPath.patient_id == action.patient_id, VideoPath.original_video == True, VideoPath.is_deleted == False).first()
+    result = await session.execute(select(VideoPath).where(VideoPath.id == action.video_id,
+                                            VideoPath.patient_id == action.patient_id, VideoPath.original_video == True, VideoPath.is_deleted == False))
+    video = result.scalar_one_or_none()
     if not video:
         return {"message": "Video not found"}
-    parent_id_exists = session.query(Action).filter(
-        Action.id == action.parent_id, Action.is_deleted == False).first()
-    if action.parent_id and not parent_id_exists:
-        return {"message": "Parent action not found"}
+
+    if action.parent_id:
+        result = await session.execute(select(Action).where(
+            Action.id == action.parent_id, Action.is_deleted == False))
+        parent_id_exists = result.scalar_one_or_none()
+        if not parent_id_exists:
+            return {"message": "Parent action not found"}
+
     new_action = Action(patient_id=action.patient_id,
                         original_video_id=action.video_id, status="waiting", progress="waiting for processing", is_deleted=False, create_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"), update_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                         parent_id=action.parent_id or None)
     session.add(new_action)
-    session.commit()
+    await session.commit()
+    await session.refresh(new_action)  # Refresh to get the ID and avoid detached instance
     action_id = new_action.id
-    action_ = session.query(Action).filter(
-        Action.id == action_id, Action.is_deleted == False).first()
+
+    result = await session.execute(select(Action).where(
+        Action.id == action_id, Action.is_deleted == False))
+    action_ = result.scalar_one_or_none()
     if not action_:
         return {"message": "Action not found"}
     action_.parent_id = action.parent_id or action_id
-    session.commit()
-    redis_client = get_redis_connection()
-    redis_client.rpush("waiting_actions",
-                       f"{action.patient_id}-{action_id}-{action.video_id}")
+    await session.commit()
+
+    await async_redis_rpush("waiting_actions",
+                            f"{action.patient_id}-{action_id}-{action.video_id}")
     video.action_id = action_id
     video.update_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     session.add(video)
-    session.commit()
+    await session.commit()
     return {"message": "Action created successfully", "action_id": action_id}
 
 
 @router.get("/get_actions/{patient_id}")
 async def get_actions(patient_id: int, session: SessionDep = SessionDep):
-    actions = session.query(Action).filter(
-        Action.patient_id == patient_id, Action.is_deleted == False).all()
+    result = await session.execute(select(Action).where(
+        Action.patient_id == patient_id, Action.is_deleted == False))
+    actions = result.scalars().all()
     if not actions:
         return {"message": "No actions found"}
     actions = sorted(actions, key=lambda x: x.create_time, reverse=True)
@@ -101,11 +110,11 @@ async def get_actions(patient_id: int, session: SessionDep = SessionDep):
 
 @router.get("/get_action_by_id/{action_id}")
 async def get_action_by_id(action_id: int, session: SessionDep = SessionDep):
-    if (
-        action := session.query(Action)
-        .filter(Action.id == action_id, Action.is_deleted == False)
-        .first()
-    ):
+    result = await session.execute(select(Action).where(
+        Action.id == action_id, Action.is_deleted == False))
+    action = result.scalar_one_or_none()
+
+    if action:
         return {"action": action.to_dict()}
     else:
         return {"message": "Action not found"}
@@ -113,35 +122,45 @@ async def get_action_by_id(action_id: int, session: SessionDep = SessionDep):
 
 @router.get("/get_action_by_parent_id/{parent_id}")
 async def get_action_by_parent_id(parent_id: int, session: SessionDep = SessionDep):
-    action = session.query(Action).filter(
-        Action.parent_id == parent_id, Action.is_deleted == False).all()
-    if not action:
+    result = await session.execute(select(Action).where(
+        Action.parent_id == parent_id, Action.is_deleted == False))
+    actions = result.scalars().all()
+    if not actions:
         return {"message": "No actions found"}
-    action = sorted(action, key=lambda x: x.create_time, reverse=True)
-    return {"action": [a.to_dict() for a in action]}
+    actions = sorted(actions, key=lambda x: x.create_time, reverse=True)
+    return {"action": [a.to_dict() for a in actions]}
 
 
 @router.delete("/delete_action/{action_id}")
 async def delete_action(action_id: int, session: SessionDep = SessionDep):
-    action = session.query(Action).filter(
-        Action.id == action_id, Action.is_deleted == False).first()
+    result = await session.execute(select(Action).where(
+        Action.id == action_id, Action.is_deleted == False))
+    action = result.scalar_one_or_none()
     if not action:
         return {"message": "Action not found"}
     action.is_deleted = True
     action.update_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    # if action.parent_id == action_id:
-    actions = session.query(Action).filter(
-        Action.id == action_id, Action.is_deleted == False).all()
+
+    # Get all actions with this ID (should be just one)
+    result = await session.execute(select(Action).where(
+        Action.id == action_id, Action.is_deleted == False))
+    actions = result.scalars().all()
     for action_ in actions:
         action_.is_deleted = True
         action_.update_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        stages = session.query(Stage).filter(
-            Stage.action_id == action_.id, Stage.is_deleted == False).all()
+
+        # Get stages for this action
+        result = await session.execute(select(Stage).where(
+            Stage.action_id == action_.id, Stage.is_deleted == False))
+        stages = result.scalars().all()
         for stage in stages:
             stage.is_deleted = True
             stage.update_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            steps_info = session.query(StepsInfo).filter(
-                StepsInfo.stage_id == stage.id, StepsInfo.is_deleted == False).all()
+
+            # Get steps info for this stage
+            result = await session.execute(select(StepsInfo).where(
+                StepsInfo.stage_id == stage.id, StepsInfo.is_deleted == False))
+            steps_info = result.scalars().all()
             for step_info in steps_info:
                 step_info.is_deleted = True
                 step_info.update_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -160,29 +179,32 @@ async def delete_action(action_id: int, session: SessionDep = SessionDep):
     #     for step_info in steps_info:
     #         step_info.is_deleted = True
     #         step_info.update_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    session.commit()
-    redis_conn.lrem("waiting_actions", 0,
-                    f"{action.patient_id}-{action_id}-{action.original_video_id}")
-    redis_conn.lrem("running_actions", 0,
-                    f"{action.patient_id}-{action_id}-{action.original_video_id}")
+    await session.commit()
+    await session.refresh(action)
+    await async_redis_lrem("waiting_actions", 0,
+                           f"{action.patient_id}-{action_id}-{action.original_video_id}")
+    await async_redis_lrem("running_actions", 0,
+                           f"{action.patient_id}-{action_id}-{action.original_video_id}")
     return {"message": "Action deleted successfully"}
 
 
 @router.put("/update_action")
 async def update_action(data: UpdateAction = Body(...), session: SessionDep = SessionDep):
-    action = session.query(Action).filter(
-        Action.id == data.action_id, Action.is_deleted == False).first()
+    result = await session.execute(select(Action).where(
+        Action.id == data.action_id, Action.is_deleted == False))
+    action = result.scalar_one_or_none()
     if not action:
         return {"message": "Action not found"}
     if data.inference_video_id:
         action.inference_video_id = data.inference_video_id
         action.update_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        session.commit()
+        await session.commit()
     for stage_data in sorted(data.data, key=lambda x: x.stage_n):
         stage = Stage(action_id=data.action_id, stage_n=stage_data.stage_n,
                       start_frame=stage_data.start_frame, end_frame=stage_data.end_frame, is_deleted=False, create_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"), update_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
         session.add(stage)
-        session.commit()
+        await session.commit()
+        await session.refresh(stage)  # Refresh to get the ID and avoid detached instance
         for n, step_info in enumerate(stage_data.steps_info):
             step_info_db = StepsInfo(stage_id=stage.id, step_id=n + 1,
                                      start_frame=step_info.start_frame, end_frame=step_info.end_frame,
@@ -194,7 +216,7 @@ async def update_action(data: UpdateAction = Body(...), session: SessionDep = Se
                                      support_time=step_info.support_time, liftoff_height=step_info.liftoff_height,
                                      is_deleted=False, create_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"), update_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
             session.add(step_info_db)
-    session.commit()
+    await session.commit()
     return {"message": "Action updated successfully"}
 
 
@@ -204,14 +226,15 @@ async def update_action_status(action_status: UpdateActionStatus, session: Sessi
     status = action_status.status
     action_name = action_status.action
     if status != "running":
-        redis_conn.lrem("running_actions", 0, action_name)
-    action = session.query(Action).filter(
-        Action.id == action_id, Action.is_deleted == False).first()
+        await async_redis_lrem("running_actions", 0, action_name)
+    result = await session.execute(select(Action).where(
+        Action.id == action_id, Action.is_deleted == False))
+    action = result.scalar_one_or_none()
     if not action:
         return {"message": "Action not found"}
     action.status = status
     action.update_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    session.commit()
+    await session.commit()
     return {"message": "Action status updated successfully"}
 
 
@@ -219,11 +242,12 @@ async def update_action_status(action_status: UpdateActionStatus, session: Sessi
 async def update_action_progress(action_progress: UpdateActionProgress, session: SessionDep = SessionDep):
     action_id = action_progress.action_id
     progress = action_progress.progress
-    action = session.query(Action).filter(
-        Action.id == action_id, Action.is_deleted == False).first()
+    result = await session.execute(select(Action).where(
+        Action.id == action_id, Action.is_deleted == False))
+    action = result.scalar_one_or_none()
     if not action:
         return {"message": "Action not found"}
     action.progress = progress
     action.update_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    session.commit()
+    await session.commit()
     return {"message": "Action progress updated successfully"}

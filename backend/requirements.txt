@@ -1,8 +1,12 @@
 bcrypt
-redis
+aioredis
 fastapi[standard]
 uvicorn
 sqlmodel
 pyecharts
-psycopg2
+asyncpg
 opencv-python-headless
+aiofiles
+redis
+pandas
+openpyxl

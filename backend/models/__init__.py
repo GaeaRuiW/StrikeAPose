@@ -7,20 +7,24 @@ from models.steps_info import StepsInfo
 from models.patients import Patients
 from models.doctors import Doctors
 from models.video_path import VideoPath
-from sqlmodel import Session, SQLModel, create_engine
+from sqlmodel import SQLModel
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from typing_extensions import Annotated
 
-engine = create_engine(postgres_uri)
-print("engine", engine)
+# Convert PostgreSQL URI to async format
+async_postgres_uri = postgres_uri.replace("postgresql://", "postgresql+asyncpg://")
+engine = create_async_engine(async_postgres_uri)
+print("async engine", engine)
 
 
-def create_db_and_tables():
-    SQLModel.metadata.create_all(engine)
+async def create_db_and_tables():
+    async with engine.begin() as conn:
+        await conn.run_sync(SQLModel.metadata.create_all)
 
 
-def get_session():
-    with Session(engine) as session:
+async def get_session():
+    async with AsyncSession(engine) as session:
         yield session
 
 
-SessionDep = Annotated[Session, Depends(get_session)]
+SessionDep = Annotated[AsyncSession, Depends(get_session)]

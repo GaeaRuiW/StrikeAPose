@@ -1,0 +1,29 @@
+# Core dependencies for unified video downloader
+requests>=2.32.0
+aiohttp>=3.9.0
+asyncio
+yt-dlp>=2024.1.0
+ffmpeg-python>=0.2.0
+
+# For bilibili functionality
+pycryptodome>=3.19.0
+
+# For progress tracking and utilities
+tqdm>=4.66.0
+
+# For async file operations
+aiofiles>=23.0.0
+
+# For FastAPI web service
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+pydantic>=2.0.0
+python-multipart>=0.0.6
+
+# IMPORTANT: FFmpeg system dependency required!
+# For YouTube high-quality downloads (4K, separate video+audio streams):
+# Ubuntu/Debian: sudo apt install ffmpeg
+# macOS: brew install ffmpeg
+# Windows: Download from https://ffmpeg.org/download.html
+#
+# Without FFmpeg, YouTube downloads will fall back to lower quality pre-merged streams!

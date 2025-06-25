@@ -1,9 +1,11 @@
+import io
 import os
 import shutil
 import tempfile
 import uuid
 from datetime import datetime
 
+import httpx
 from common.utils import convert_to_mp4, generate_thumbnail
 from config import video_dir
 from fastapi import APIRouter, Body, File, HTTPException, Request, UploadFile
@@ -11,6 +13,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from models import (Action, Doctors, Patients, SessionDep, Stage, StepsInfo,
                     VideoPath)
 from pydantic import BaseModel
+from sqlalchemy import select
 from starlette.concurrency import run_in_threadpool
 
 router = APIRouter(tags=["videos"], prefix="/videos")
@@ -28,71 +31,104 @@ class UpdateNotes(BaseModel):
     patient_id: int
     notes: str
 
+class DownloadVideoFromUrl(BaseModel):
+    patient_id: int
+    url: str
+
 
 @router.delete("/delete_video")
-def delete_video(video: DeleteVideo = Body(...), session: SessionDep = SessionDep):
-    doctor = session.query(Doctors).filter(
-        Doctors.id == video.doctor_id, Doctors.is_deleted == False).first()
+async def delete_video(video: DeleteVideo = Body(...), session: SessionDep = SessionDep):
+    result = await session.execute(select(Doctors).where(
+        Doctors.id == video.doctor_id, Doctors.is_deleted == False))
+    doctor = result.scalar_one_or_none()
     if not doctor:
         return {"message": "Doctor not found"}
     if doctor.role_id != 1:
-        video_ = session.query(VideoPath).filter(VideoPath.id == video.video_id,
-                                                 VideoPath.is_deleted == False).first()
+        result = await session.execute(select(VideoPath).where(
+            VideoPath.id == video.video_id, VideoPath.is_deleted == False))
+        video_ = result.scalar_one_or_none()
         if not video_:
             return {"message": "Video not found or this doctor does not have permission to delete this video"}
     else:
-        video_ = session.query(VideoPath).filter(VideoPath.id == video.video_id,
-                                                 VideoPath.is_deleted == False, VideoPath.patient_id == video.patient_id).first()
+        result = await session.execute(select(VideoPath).where(
+            VideoPath.id == video.video_id, VideoPath.is_deleted == False,
+            VideoPath.patient_id == video.patient_id))
+        video_ = result.scalar_one_or_none()
     if not video_:
         return {"message": "Video not found"}
     action_id = video_.action_id
     if not action_id:
-        # session.delete(video_)
         video_.is_deleted = True
-        session.commit()
+        await session.commit()
         return {"message": "Video deleted successfully"}
-    all_videos = session.query(VideoPath).filter(
-        VideoPath.action_id == action_id, VideoPath.is_deleted == False).all()
+    result = await session.execute(select(VideoPath).where(
+        VideoPath.action_id == action_id, VideoPath.is_deleted == False))
+    all_videos = result.scalars().all()
     for video_ in all_videos:
-        # video_path = video_.video_path
-        # if os.path.exists(video_path):
-        #     print(f"Deleting video: {video_path}")
-        #     os.remove(video_path)
-        # if os.path.exists(video_path.replace("mp4", "json")):
-        #     print(f"Deleting json: {video_path.replace('mp4', 'json')}")
-        #     os.remove(video_path.replace("mp4", "json"))
-        # session.delete(video_)
         video_.is_deleted = True
 
-    all_actions = session.query(Action).filter(
-        Action.original_video_id == video_.id, Action.is_deleted == False).all()
-    all_parent_actions = session.query(Action).filter(
-        Action.parent_id == action_id, Action.is_deleted == False).all()
+    result = await session.execute(select(Action).where(
+        Action.original_video_id == video_.id, Action.is_deleted == False))
+    all_actions = result.scalars().all()
+
+    result = await session.execute(select(Action).where(
+        Action.parent_id == action_id, Action.is_deleted == False))
+    all_parent_actions = result.scalars().all()
     all_actions.extend(all_parent_actions)
+
     for action_ in all_actions:
-        all_stages = session.query(Stage).filter(
-            Stage.action_id == action_id, Stage.is_deleted == False).all()
+        result = await session.execute(select(Stage).where(
+            Stage.action_id == action_id, Stage.is_deleted == False))
+        all_stages = result.scalars().all()
         for stage_ in all_stages:
-            steps = session.query(StepsInfo).filter(
-                StepsInfo.stage_id == stage_.id, StepsInfo.is_deleted == False).all()
+            result = await session.execute(select(StepsInfo).where(
+                StepsInfo.stage_id == stage_.id, StepsInfo.is_deleted == False))
+            steps = result.scalars().all()
             for step in steps:
                 step.is_deleted = True
             stage_.is_deleted = True
         action_.is_deleted = True
 
-            #         session.delete(step)
-            #     session.delete(stage_)
-            # session.delete(action_)
-    session.commit()
+    await session.commit()
 
     return {"message": "Video deleted successfully"}
 
+@router.post("/download_from_url")
+async def download_from_url(params: DownloadVideoFromUrl = Body(...), session: SessionDep = SessionDep):
+    result = await session.execute(select(Patients).where(
+        Patients.id == params.patient_id, Patients.is_deleted == False))
+    patient = result.scalar_one_or_none()
+    if not patient:
+        return {"message": "Patient not found"}
+    gen_uuid = uuid.uuid4().hex[:8]
+    output_path = os.path.join(
+        video_dir, "original", f"{patient.id}-{gen_uuid}.mp4")
+    async with httpx.AsyncClient() as client:
+        response =  await client.post(
+            "http://pose-downloader:8080/api/download", json={"url": params.url, "output_path": output_path, "quality": "best", "info_only": False}, timeout=300
+        )
+        if response.status_code != 200:
+            return response.json()
+    new_video = VideoPath(
+        video_path=output_path,
+        patient_id=patient.id,
+        original_video=True,
+        inference_video=False,
+        is_deleted=False,
+        notes="下载视频",
+        create_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        update_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    )
+    session.add(new_video)
+    await session.commit()
+    return response.json()
+
 
 @router.post("/upload/{patient_id}")
-# Use Depends() for SessionDep, make endpoint async
 async def upload_video(patient_id: int, video: UploadFile = File(...), session: SessionDep = SessionDep):
-    patient = session.query(Patients).filter(
-        Patients.id == patient_id, Patients.is_deleted == False).first()
+    result = await session.execute(select(Patients).where(
+        Patients.id == patient_id, Patients.is_deleted == False))
+    patient = result.scalar_one_or_none()
     if not patient:
         # Use HTTPException
         raise HTTPException(status_code=404, detail="Patient not found")
@@ -173,7 +209,7 @@ async def upload_video(patient_id: int, video: UploadFile = File(...), session: 
             temp_file_path = None  # Mark as moved
 
         # --- Step 3: Add record to database ---
-        current_time = datetime.now()  # Use datetime objects if DB column type allows
+        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         new_video = VideoPath(
             video_path=final_video_path,
             patient_id=patient_id,
@@ -185,8 +221,8 @@ async def upload_video(patient_id: int, video: UploadFile = File(...), session: 
             update_time=current_time
         )
         session.add(new_video)
-        session.commit()
-        session.refresh(new_video)  # Get the generated ID
+        await session.commit()
+        await session.refresh(new_video)  # Get the generated ID
 
         return {"message": "Video uploaded successfully", "video_id": new_video.id}
 
@@ -214,16 +250,17 @@ async def upload_video(patient_id: int, video: UploadFile = File(...), session: 
 
 
 @router.get("/video/{video_type}/{patient_id}/{video_id}")
-def get_video(video_type: str, patient_id: int, video_id: int, session: SessionDep = SessionDep):
+async def get_video(video_type: str, patient_id: int, video_id: int, session: SessionDep = SessionDep):
     if video_type not in ["original", "inference"]:
         return {"message": "Invalid video type"}
-    video = session.query(VideoPath).filter(
+    result = await session.execute(select(VideoPath).where(
         VideoPath.id == video_id,
         VideoPath.patient_id == patient_id,
         VideoPath.original_video == (video_type == "original"),
         VideoPath.inference_video == (video_type == "inference"),
         VideoPath.is_deleted == False
-    ).first()
+    ))
+    video = result.scalar_one_or_none()
 
     if not video:
         return {"message": "Video not found"}
@@ -243,17 +280,18 @@ def get_video(video_type: str, patient_id: int, video_id: int, session: SessionD
 
 
 @router.get("/stream/{video_type}/{patient_id}/{video_id}")
-def stream_video(video_type: str, patient_id: int, video_id: int, session: SessionDep = SessionDep):
+async def stream_video(video_type: str, patient_id: int, video_id: int, session: SessionDep = SessionDep):
     if video_type not in ["original", "inference"]:
         raise HTTPException(status_code=400, detail="Invalid video type")
 
-    video = session.query(VideoPath).filter(
+    result = await session.execute(select(VideoPath).where(
         VideoPath.id == video_id,
         VideoPath.patient_id == patient_id,
         VideoPath.original_video == (video_type == "original"),
         VideoPath.inference_video == (video_type == "inference"),
         VideoPath.is_deleted == False
-    ).first()
+    ))
+    video = result.scalar_one_or_none()
 
     if not video:
         raise HTTPException(status_code=404, detail="Video not found")
@@ -271,31 +309,37 @@ def stream_video(video_type: str, patient_id: int, video_id: int, session: Sessi
 
 
 @router.get("/thumbnail_image/{video_type}/{patient_id}/{video_id}")
-def get_thumbnail_image(video_type: str, patient_id: int, video_id: int, session: SessionDep = SessionDep):
+async def get_thumbnail_image(video_type: str, patient_id: int, video_id: int, session: SessionDep = SessionDep):
     if video_type not in ["original", "inference"]:
         return {"message": "Invalid video type"}
-    video = session.query(VideoPath).filter(
+    result = await session.execute(select(VideoPath).where(
         VideoPath.id == video_id,
         VideoPath.patient_id == patient_id,
         VideoPath.original_video == (video_type == "original"),
         VideoPath.inference_video == (video_type == "inference"),
         VideoPath.is_deleted == False
-    ).first()
+    ))
+    video = result.scalar_one_or_none()
 
     if not video:
         return {"message": "Video not found"}
 
     image_path = video.video_path.replace("mp4", "jpg")
     if not os.path.exists(image_path):
-        generate_thumbnail(video.video_path, image_path, time=1)
+        await generate_thumbnail(video.video_path, image_path, time=1)
 
-    return StreamingResponse(open(image_path, "rb"), media_type="image/jpeg")
+    import aiofiles
+    async with aiofiles.open(image_path, "rb") as f:
+        content = await f.read()
+
+    return StreamingResponse(io.BytesIO(content), media_type="image/jpeg")
 
 
 @router.get("/get_videos/{patient_id}")
-def get_videos(patient_id: int, session: SessionDep = SessionDep):
-    videos = session.query(VideoPath).filter(
-        VideoPath.patient_id == patient_id, VideoPath.is_deleted == False).all()
+async def get_videos(patient_id: int, session: SessionDep = SessionDep):
+    result = await session.execute(select(VideoPath).where(
+        VideoPath.patient_id == patient_id, VideoPath.is_deleted == False))
+    videos = result.scalars().all()
     if not videos:
         return {"message": "No videos found"}
     videos = sorted(videos, key=lambda x: x.create_time, reverse=True)
@@ -319,16 +363,18 @@ def get_videos(patient_id: int, session: SessionDep = SessionDep):
 
 
 @router.get("/get_video_by_id/{video_id}")
-def get_video_by_id(video_id: int, session: SessionDep = SessionDep):
-    video = session.query(VideoPath).filter(
-        VideoPath.id == video_id, VideoPath.is_deleted == False).first()
+async def get_video_by_id(video_id: int, session: SessionDep = SessionDep):
+    result = await session.execute(select(VideoPath).where(
+        VideoPath.id == video_id, VideoPath.is_deleted == False))
+    video = result.scalar_one_or_none()
     return video.to_dict() if video else {"message": "Video not found"}
 
 
 @router.post("/insert_inference_video/{action_id}")
-def insert_inference_video(action_id: int, session: SessionDep = SessionDep):
-    video = session.query(VideoPath).filter(
-        VideoPath.action_id == action_id, VideoPath.is_deleted == False).first()
+async def insert_inference_video(action_id: int, session: SessionDep = SessionDep):
+    result = await session.execute(select(VideoPath).where(
+        VideoPath.action_id == action_id, VideoPath.is_deleted == False))
+    video = result.scalar_one_or_none()
     if not video:
         return {"message": "Video not found"}
     new_video_path = video.video_path.replace("original", "inference")
@@ -336,26 +382,32 @@ def insert_inference_video(action_id: int, session: SessionDep = SessionDep):
     new_video = VideoPath(video_path=new_video_path, patient_id=video.patient_id, original_video=False, inference_video=True, is_deleted=False, action_id=action_id, notes=None,
                           create_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"), update_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
     session.add(new_video)
-    session.commit()
+    await session.commit()
+    # Refresh to get the ID and avoid detached instance
+    await session.refresh(new_video)
     return {"message": "Inference video inserted successfully", "video_id": new_video.id}
 
 
 @router.patch("/notes")
-def update_video_notes(params: UpdateNotes = Body(...), session: SessionDep = SessionDep):
-    doctor = session.query(Doctors).filter(
-        Doctors.id == params.doctor_id, Doctors.is_deleted == False).first()
+async def update_video_notes(params: UpdateNotes = Body(...), session: SessionDep = SessionDep):
+    result = await session.execute(select(Doctors).where(
+        Doctors.id == params.doctor_id, Doctors.is_deleted == False))
+    doctor = result.scalar_one_or_none()
     if not doctor:
         return {"message": "Doctor not found"}
     if doctor.role_id != 1:
-        video_ = session.query(VideoPath).filter(VideoPath.id == params.video_id,
-                                                 VideoPath.is_deleted == False).first()
+        result = await session.execute(select(VideoPath).where(
+            VideoPath.id == params.video_id, VideoPath.is_deleted == False))
+        video_ = result.scalar_one_or_none()
         if not video_:
             return {"message": "Video not found or this doctor does not have permission to update this video"}
     else:
-        video_ = session.query(VideoPath).filter(VideoPath.id == params.video_id,
-                                                 VideoPath.is_deleted == False, VideoPath.patient_id == params.patient_id).first()
+        result = await session.execute(select(VideoPath).where(
+            VideoPath.id == params.video_id, VideoPath.is_deleted == False,
+            VideoPath.patient_id == params.patient_id))
+        video_ = result.scalar_one_or_none()
     if not video_:
         return {"message": "Video not found"}
     video_.notes = params.notes
-    session.commit()
+    await session.commit()
     return {"message": "update notes successfully"}

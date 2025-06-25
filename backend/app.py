@@ -12,7 +12,6 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from models import Roles, create_db_and_tables
-from sqlmodel import Session, create_engine
 
 app = FastAPI(doc_url=None)
 
@@ -50,18 +49,21 @@ async def startup_event():
         os.makedirs(f"{video_dir}/flipped")
     if not os.path.exists(f"{video_dir}/inference"):
         os.makedirs(f"{video_dir}/inference")
-    create_db_and_tables()
+    await create_db_and_tables()
 
-    engine = create_engine(postgres_uri)
-    with Session(engine) as session:
-        admin_role = session.query(Roles).filter(Roles.id == 1).first()
+    from models import engine
+    from sqlalchemy.ext.asyncio import AsyncSession
+    from sqlalchemy import select
+    async with AsyncSession(engine) as session:
+        result = await session.execute(select(Roles).where(Roles.id == 1))
+        admin_role = result.scalar_one_or_none()
         if not admin_role:
             admin_role = Roles(
                 role_name="admin",
                 role_desc="Administrator role with full access"
             )
             session.add(admin_role)
-            session.commit()
+            await session.commit()
             print("Admin role created successfully")
 
 if __name__ == "__main__":

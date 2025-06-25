@@ -1,12 +1,18 @@
+import io
+from datetime import datetime
+
+import pandas as pd
 from common.utils import calculate_stats
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+from fastapi.responses import StreamingResponse
 from models import SessionDep, Stage, StepsInfo
+from sqlalchemy import select
 
 router = APIRouter(tags=["tables"], prefix="/table")
 
 
 @router.get("/step_hip_degree/{action_id}")
-def get_average_step_hip_degree(action_id: int, session: SessionDep = SessionDep):
+async def get_average_step_hip_degree(action_id: int, session: SessionDep = SessionDep):
     data = {
         "left": {"low": [], "high": []},
         "right": {"low": [], "high": []},
@@ -14,10 +20,10 @@ def get_average_step_hip_degree(action_id: int, session: SessionDep = SessionDep
     }
 
     # Optimized Query: Get relevant stage IDs first
-    stages_ids_query = session.query(Stage.id).filter(
+    result = await session.execute(select(Stage.id).where(
         Stage.action_id == action_id, Stage.is_deleted == False
-    )
-    stage_ids = [id_tuple[0] for id_tuple in stages_ids_query.all()]
+    ))
+    stage_ids = [id_tuple[0] for id_tuple in result.all()]
 
     if not stage_ids:
         # Return early if no relevant stages found
@@ -26,12 +32,13 @@ def get_average_step_hip_degree(action_id: int, session: SessionDep = SessionDep
                 "standard_deviation": 0, "chart_url": f"/dashboard/step_hip_degree/{action_id}"}
 
     # Single query for all steps info
-    steps_info_query = session.query(StepsInfo).filter(
+    result = await session.execute(select(StepsInfo).where(
         StepsInfo.stage_id.in_(stage_ids),
         StepsInfo.is_deleted == False
-    )
+    ))
+    steps_info_list = result.scalars().all()
 
-    for step_info in steps_info_query.all():
+    for step_info in steps_info_list:
         if step_info.hip_min_degree is not None:
             data[step_info.front_leg]["low"].append(step_info.hip_min_degree)
             data["all"]["low"].append(step_info.hip_min_degree)
@@ -85,32 +92,34 @@ def get_average_step_hip_degree(action_id: int, session: SessionDep = SessionDep
         "low_standard_deviation": result["left_low_standard_deviation"],
         "high_standard_deviation": result["left_high_standard_deviation"],
         "standard_deviation": result["standard_deviation"],
-        "chart_url": f"/dashboard/step_hip_degree/{action_id}"
+        "chart_url": f"/dashboard/step_hip_degree/{action_id}",
+        "download_url": f"/table/step_hip_degree/{action_id}/download"
     }
 
 
 @router.get("/step_length/{action_id}")
-def get_average_step_length(action_id: int, session: SessionDep = SessionDep):
+async def get_average_step_length(action_id: int, session: SessionDep = SessionDep):
     left_step_length = []
     right_step_length = []
     step_length = []
 
-    stages_ids_query = session.query(Stage.id).filter(
+    result = await session.execute(select(Stage.id).where(
         Stage.action_id == action_id, Stage.is_deleted == False
-    )
-    stage_ids = [id_tuple[0] for id_tuple in stages_ids_query.all()]
+    ))
+    stage_ids = [id_tuple[0] for id_tuple in result.all()]
 
     if not stage_ids:
         return {"left_average": 0, "right_average": 0, "average": 0,
                 "left_standard_deviation": 0, "right_standard_deviation": 0,
                 "standard_deviation": 0, "chart_url": f"/dashboard/step_length/{action_id}"}
 
-    steps_info_query = session.query(StepsInfo).filter(
+    result = await session.execute(select(StepsInfo).where(
         StepsInfo.stage_id.in_(stage_ids),
         StepsInfo.is_deleted == False
-    )
+    ))
+    steps_info_list = result.scalars().all()
 
-    for step_info in steps_info_query.all():
+    for step_info in steps_info_list:
         if step_info.step_length is not None:  # Check for None
             if step_info.front_leg == "left":
                 left_step_length.append(step_info.step_length)
@@ -129,7 +138,6 @@ def get_average_step_length(action_id: int, session: SessionDep = SessionDep):
     min_value = min(step_length, default=0)
     max_value = max(step_length, default=0)
 
-
     return {
         "left_average": left_average,
         "right_average": right_average,
@@ -143,30 +151,33 @@ def get_average_step_length(action_id: int, session: SessionDep = SessionDep):
         "right_max_value": right_max_value,
         "min_value": min_value,
         "max_value": max_value,
-        "chart_url": f"/dashboard/step_length/{action_id}"
+        "chart_url": f"/dashboard/step_length/{action_id}",
+        "download_url": f"/table/step_length/{action_id}/download"
     }
 
+
 @router.get("/step_width/{action_id}")
-def get_average_step_width(action_id: int, session: SessionDep = SessionDep):
+async def get_average_step_width(action_id: int, session: SessionDep = SessionDep):
     step_width = []
     left_step_width = []
     right_step_width = []
 
-    stages_ids_query = session.query(Stage.id).filter(
+    result = await session.execute(select(Stage.id).where(
         Stage.action_id == action_id, Stage.is_deleted == False
-    )
-    stage_ids = [id_tuple[0] for id_tuple in stages_ids_query.all()]
+    ))
+    stage_ids = [id_tuple[0] for id_tuple in result.all()]
 
     if not stage_ids:
         return {"average": 0, "standard_deviation": 0,
                 "chart_url": f"/dashboard/step_width/{action_id}"}
 
-    steps_info_query = session.query(StepsInfo).filter(
+    result = await session.execute(select(StepsInfo).where(
         StepsInfo.stage_id.in_(stage_ids),
         StepsInfo.is_deleted == False
-    )
+    ))
+    steps_info_list = result.scalars().all()
 
-    for step_info in steps_info_query.all():
+    for step_info in steps_info_list:
         if step_info.step_width is not None:
             if step_info.front_leg == "left":
                 left_step_width.append(step_info.step_width)
@@ -193,30 +204,33 @@ def get_average_step_width(action_id: int, session: SessionDep = SessionDep):
         "max_value": max(step_width, default=0),
         "standard_deviation": standard_deviation,
         "chart_url": f"/dashboard/step_width/{action_id}",
+        "download_url": f"/table/step_width/{action_id}/download"
     }
 
+
 @router.get("/step_speed/{action_id}")
-def get_average_step_speed(action_id: int, session: SessionDep = SessionDep):
+async def get_average_step_speed(action_id: int, session: SessionDep = SessionDep):
     left_step_speed = []
     right_step_speed = []
     step_speed = []
 
-    stages_ids_query = session.query(Stage.id).filter(
+    result = await session.execute(select(Stage.id).where(
         Stage.action_id == action_id, Stage.is_deleted == False
-    )
-    stage_ids = [id_tuple[0] for id_tuple in stages_ids_query.all()]
+    ))
+    stage_ids = [id_tuple[0] for id_tuple in result.all()]
 
     if not stage_ids:
         return {"left_average": 0, "right_average": 0, "average": 0,
                 "left_standard_deviation": 0, "right_standard_deviation": 0,
                 "standard_deviation": 0, "chart_url": f"/dashboard/step_speed/{action_id}"}
 
-    steps_info_query = session.query(StepsInfo).filter(
+    result = await session.execute(select(StepsInfo).where(
         StepsInfo.stage_id.in_(stage_ids),
         StepsInfo.is_deleted == False
-    )
+    ))
+    steps_info_list = result.scalars().all()
 
-    for step_info in steps_info_query.all():
+    for step_info in steps_info_list:
         if step_info.step_speed is not None:  # Check for None
             if step_info.front_leg == "left":
                 left_step_speed.append(step_info.step_speed)
@@ -250,32 +264,34 @@ def get_average_step_speed(action_id: int, session: SessionDep = SessionDep):
         "right_max_value": right_max_value,
         "min_value": min_value,
         "max_value": max_value,
-        "chart_url": f"/dashboard/step_speed/{action_id}"
+        "chart_url": f"/dashboard/step_speed/{action_id}",
+        "download_url": f"/table/step_speed/{action_id}/download"
     }
 
 
 @router.get("/step_stride/{action_id}")
-def get_average_step_stride(action_id: int, session: SessionDep = SessionDep):
+async def get_average_step_stride(action_id: int, session: SessionDep = SessionDep):
     step_stride = []
     left_step_stride = []
     right_step_stride = []
 
-    stages_ids_query = session.query(Stage.id).filter(
+    result = await session.execute(select(Stage.id).where(
         Stage.action_id == action_id, Stage.is_deleted == False
-    )
-    stage_ids = [id_tuple[0] for id_tuple in stages_ids_query.all()]
+    ))
+    stage_ids = [id_tuple[0] for id_tuple in result.all()]
 
     if not stage_ids:
         return {"average": 0, "standard_deviation": 0,
                 "chart_url": f"/dashboard/step_stride/{action_id}"}
 
-    steps_info_query = session.query(StepsInfo).filter(
+    result = await session.execute(select(StepsInfo).where(
         StepsInfo.stage_id.in_(stage_ids),
         StepsInfo.is_deleted == False,
         StepsInfo.first_step == False  # Keep this filter if intended
-    )
+    ))
+    steps_info_list = result.scalars().all()
 
-    for step_info in steps_info_query.all():
+    for step_info in steps_info_list:
         if step_info.stride_length is not None:  # Check for None
             if step_info.front_leg == "left":
                 left_step_stride.append(step_info.stride_length)
@@ -308,32 +324,34 @@ def get_average_step_stride(action_id: int, session: SessionDep = SessionDep):
         "right_max_value": right_max_value,
         "min_value": min_value,
         "max_value": max_value,
-        "chart_url": f"/dashboard/step_stride/{action_id}"
+        "chart_url": f"/dashboard/step_stride/{action_id}",
+        "download_url": f"/table/step_stride/{action_id}/download"
     }
 
 
 @router.get("/step_difference/{action_id}")
-def get_average_step_difference(action_id: int, session: SessionDep = SessionDep):
+async def get_average_step_difference(action_id: int, session: SessionDep = SessionDep):
     step_difference = []
     left_step_difference = []
     right_step_difference = []
 
-    stages_ids_query = session.query(Stage.id).filter(
+    result = await session.execute(select(Stage.id).where(
         Stage.action_id == action_id, Stage.is_deleted == False
-    )
-    stage_ids = [id_tuple[0] for id_tuple in stages_ids_query.all()]
+    ))
+    stage_ids = [id_tuple[0] for id_tuple in result.all()]
 
     if not stage_ids:
         return {"average": 0, "standard_deviation": 0,
                 "chart_url": f"/dashboard/step_difference/{action_id}"}
 
-    steps_info_query = session.query(StepsInfo).filter(
+    result = await session.execute(select(StepsInfo).where(
         StepsInfo.stage_id.in_(stage_ids),
         StepsInfo.is_deleted == False,
         StepsInfo.first_step == False
-    )
+    ))
+    steps_info_list = result.scalars().all()
 
-    for step_info in steps_info_query.all():
+    for step_info in steps_info_list:
         if step_info.steps_diff is not None:
             if step_info.front_leg == "left":
                 left_step_difference.append(step_info.steps_diff)
@@ -366,32 +384,34 @@ def get_average_step_difference(action_id: int, session: SessionDep = SessionDep
         "right_max_value": right_max_value,
         "min_value": min_value,
         "max_value": max_value,
-        "chart_url": f"/dashboard/step_difference/{action_id}"
+        "chart_url": f"/dashboard/step_difference/{action_id}",
+        "download_url": f"/table/step_difference/{action_id}/download"
     }
 
 
 @router.get("/support_time/{action_id}")
-def get_average_support_time(action_id: int, session: SessionDep = SessionDep):
+async def get_average_support_time(action_id: int, session: SessionDep = SessionDep):
     left_support_time = []
     right_support_time = []
     support_time = []
 
-    stages_ids_query = session.query(Stage.id).filter(
+    result = await session.execute(select(Stage.id).where(
         Stage.action_id == action_id, Stage.is_deleted == False
-    )
-    stage_ids = [id_tuple[0] for id_tuple in stages_ids_query.all()]
+    ))
+    stage_ids = [id_tuple[0] for id_tuple in result.all()]
 
     if not stage_ids:
         return {"left_average": 0, "right_average": 0, "average": 0,
                 "left_standard_deviation": 0, "right_standard_deviation": 0,
                 "standard_deviation": 0, "chart_url": f"/dashboard/support_time/{action_id}"}
 
-    steps_info_query = session.query(StepsInfo).filter(
+    result = await session.execute(select(StepsInfo).where(
         StepsInfo.stage_id.in_(stage_ids),
         StepsInfo.is_deleted == False
-    )
+    ))
+    steps_info_list = result.scalars().all()
 
-    for step_info in steps_info_query.all():
+    for step_info in steps_info_list:
         if step_info.support_time is not None:  # Check for None
             if step_info.front_leg == "left":
                 left_support_time.append(step_info.support_time)
@@ -423,32 +443,34 @@ def get_average_support_time(action_id: int, session: SessionDep = SessionDep):
         "right_max_value": right_max_value,
         "min_value": min_value,
         "max_value": max_value,
-        "chart_url": f"/dashboard/support_time/{action_id}"
+        "chart_url": f"/dashboard/support_time/{action_id}",
+        "download_url": f"/table/support_time/{action_id}/download"
     }
 
 
 @router.get("/liftoff_height/{action_id}")
-def get_average_liftoff_height(action_id: int, session: SessionDep = SessionDep):
+async def get_average_liftoff_height(action_id: int, session: SessionDep = SessionDep):
     left_liftoff_height = []
     right_liftoff_height = []
     liftoff_height = []
 
-    stages_ids_query = session.query(Stage.id).filter(
+    result = await session.execute(select(Stage.id).where(
         Stage.action_id == action_id, Stage.is_deleted == False
-    )
-    stage_ids = [id_tuple[0] for id_tuple in stages_ids_query.all()]
+    ))
+    stage_ids = [id_tuple[0] for id_tuple in result.all()]
 
     if not stage_ids:
         return {"left_average": 0, "right_average": 0, "average": 0,
                 "left_standard_deviation": 0, "right_standard_deviation": 0,
                 "standard_deviation": 0, "chart_url": f"/dashboard/liftoff_height/{action_id}"}
 
-    steps_info_query = session.query(StepsInfo).filter(
+    result = await session.execute(select(StepsInfo).where(
         StepsInfo.stage_id.in_(stage_ids),
         StepsInfo.is_deleted == False
-    )
+    ))
+    steps_info_list = result.scalars().all()
 
-    for step_info in steps_info_query.all():
+    for step_info in steps_info_list:
         if step_info.liftoff_height is not None:
             if step_info.front_leg == "left":
                 left_liftoff_height.append(step_info.liftoff_height)
@@ -481,5 +503,201 @@ def get_average_liftoff_height(action_id: int, session: SessionDep = SessionDep)
         "right_max_value": right_max_value,
         "min_value": min_value,
         "max_value": max_value,
-        "chart_url": f"/dashboard/liftoff_height/{action_id}"
+        "chart_url": f"/dashboard/liftoff_height/{action_id}",
+        "download_url": f"/table/liftoff_height/{action_id}/download"
     }
+
+
+# Helper function to create Excel file from data
+async def create_excel_response(data: dict, filename: str) -> StreamingResponse:
+    """Create an Excel file from data and return as StreamingResponse"""
+    # Create a pandas DataFrame from the data
+    df_data = []
+
+    # Extract the main statistics
+    df_data.extend(
+        {"Metric": key, "Value": value}
+        for key, value in data.items()
+        if key not in ["chart_url", "download_url"]
+    )
+    df = pd.DataFrame(df_data)
+
+    # Create Excel file in memory
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, sheet_name='Statistics', index=False)
+
+    output.seek(0)
+
+    return StreamingResponse(
+        io.BytesIO(output.read()),
+        media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
+
+
+# Download APIs for each table endpoint
+
+@router.get("/step_hip_degree/{action_id}/download")
+async def download_step_hip_degree(action_id: int, session: SessionDep = SessionDep):
+    """Download step hip degree data as Excel file"""
+    # Get the data from the original API
+    data = await get_average_step_hip_degree(action_id, session)
+
+    # Create filename with timestamp
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"step_hip_degree_action_{action_id}_{timestamp}.xlsx"
+
+    return await create_excel_response(data, filename)
+
+
+@router.get("/step_length/{action_id}/download")
+async def download_step_length(action_id: int, session: SessionDep = SessionDep):
+    """Download step length data as Excel file"""
+    data = await get_average_step_length(action_id, session)
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"step_length_action_{action_id}_{timestamp}.xlsx"
+
+    return await create_excel_response(data, filename)
+
+
+@router.get("/step_width/{action_id}/download")
+async def download_step_width(action_id: int, session: SessionDep = SessionDep):
+    """Download step width data as Excel file"""
+    data = await get_average_step_width(action_id, session)
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"step_width_action_{action_id}_{timestamp}.xlsx"
+
+    return await create_excel_response(data, filename)
+
+
+@router.get("/step_speed/{action_id}/download")
+async def download_step_speed(action_id: int, session: SessionDep = SessionDep):
+    """Download step speed data as Excel file"""
+    data = await get_average_step_speed(action_id, session)
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"step_speed_action_{action_id}_{timestamp}.xlsx"
+
+    return await create_excel_response(data, filename)
+
+
+@router.get("/step_stride/{action_id}/download")
+async def download_step_stride(action_id: int, session: SessionDep = SessionDep):
+    """Download step stride data as Excel file"""
+    data = await get_average_step_stride(action_id, session)
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"step_stride_action_{action_id}_{timestamp}.xlsx"
+
+    return await create_excel_response(data, filename)
+
+
+@router.get("/step_difference/{action_id}/download")
+async def download_step_difference(action_id: int, session: SessionDep = SessionDep):
+    """Download step difference data as Excel file"""
+    data = await get_average_step_difference(action_id, session)
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"step_difference_action_{action_id}_{timestamp}.xlsx"
+
+    return await create_excel_response(data, filename)
+
+
+@router.get("/support_time/{action_id}/download")
+async def download_support_time(action_id: int, session: SessionDep = SessionDep):
+    """Download support time data as Excel file"""
+    data = await get_average_support_time(action_id, session)
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"support_time_action_{action_id}_{timestamp}.xlsx"
+
+    return await create_excel_response(data, filename)
+
+
+@router.get("/liftoff_height/{action_id}/download")
+async def download_liftoff_height(action_id: int, session: SessionDep = SessionDep):
+    """Download liftoff height data as Excel file"""
+    data = await get_average_liftoff_height(action_id, session)
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"liftoff_height_action_{action_id}_{timestamp}.xlsx"
+
+    return await create_excel_response(data, filename)
+
+
+@router.get("/all_metrics/{action_id}/download")
+async def download_all_metrics(action_id: int, session: SessionDep = SessionDep):
+    """Download all metrics data as Excel file with multiple sheets"""
+
+    # Get all data from different APIs
+    hip_degree_data = await get_average_step_hip_degree(action_id, session)
+    step_length_data = await get_average_step_length(action_id, session)
+    step_width_data = await get_average_step_width(action_id, session)
+    step_speed_data = await get_average_step_speed(action_id, session)
+    step_stride_data = await get_average_step_stride(action_id, session)
+    step_difference_data = await get_average_step_difference(action_id, session)
+    support_time_data = await get_average_support_time(action_id, session)
+    liftoff_height_data = await get_average_liftoff_height(action_id, session)
+
+    # Create Excel file with multiple sheets
+    output = io.BytesIO()
+
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        # Helper function to convert data to DataFrame
+        def data_to_df(data, sheet_name):
+            df_data = []
+            for key, value in data.items():
+                if key not in ["chart_url", "download_url"]:
+                    df_data.append({"Metric": key, "Value": value})
+            df = pd.DataFrame(df_data)
+            df.to_excel(writer, sheet_name=sheet_name, index=False)
+
+        # Create sheets for each metric
+        data_to_df(hip_degree_data, "Hip Degree")
+        data_to_df(step_length_data, "Step Length")
+        data_to_df(step_width_data, "Step Width")
+        data_to_df(step_speed_data, "Step Speed")
+        data_to_df(step_stride_data, "Step Stride")
+        data_to_df(step_difference_data, "Step Difference")
+        data_to_df(support_time_data, "Support Time")
+        data_to_df(liftoff_height_data, "Liftoff Height")
+
+        # Create summary sheet
+        summary_data = []
+        summary_data.append({"Metric": "Hip Degree Average",
+                            "Value": hip_degree_data.get("average", 0)})
+        summary_data.append(
+            {"Metric": "Step Length Average", "Value": step_length_data.get("average", 0)})
+        summary_data.append({"Metric": "Step Width Average",
+                            "Value": step_width_data.get("average", 0)})
+        summary_data.append({"Metric": "Step Speed Average",
+                            "Value": step_speed_data.get("average", 0)})
+        summary_data.append(
+            {"Metric": "Step Stride Average", "Value": step_stride_data.get("average", 0)})
+        summary_data.append({"Metric": "Step Difference Average",
+                            "Value": step_difference_data.get("average", 0)})
+        summary_data.append({"Metric": "Support Time Average",
+                            "Value": support_time_data.get("average", 0)})
+        summary_data.append({"Metric": "Liftoff Height Average",
+                            "Value": liftoff_height_data.get("average", 0)})
+
+        summary_df = pd.DataFrame(summary_data)
+        summary_df.to_excel(writer, sheet_name="Summary", index=False)
+
+    output.seek(0)
+
+    # Create filename with timestamp
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"all_metrics_action_{action_id}_{timestamp}.xlsx"
+
+    # Create streaming response
+    response = StreamingResponse(
+        io.BytesIO(output.read()),
+        media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+    return response

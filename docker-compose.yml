@@ -103,6 +103,18 @@ services:
     restart: always
     networks:
       - strike
+  downloader:
+    build:
+      context: .
+      dockerfile: ./video_downloader/Dockerfile
+    ports:
+      - "8091:8080"
+    container_name: pose-downloader
+    networks:
+      - strike
+    restart: always
+    volumes:
+      - /data/pose/videos:/data/videos
 networks:
   strike:
     driver: bridge
