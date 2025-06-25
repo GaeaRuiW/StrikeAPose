@@ -393,6 +393,9 @@ def main(action_id, input_video_file, out_video_file, out_json_file, out_warped_
     processed_total = int(total_frames * (target_fps / original_fps))
     pbar_video = tqdm(total=processed_total, desc="Processing video frames")  # 新增进度条
 
+    # 添加ID计数器
+    id_frame_counter = defaultdict(int)
+
     if not video_writer.isOpened():
         # print(f"Failed to create output video: {mid_video_file}")
         return
@@ -529,191 +532,203 @@ def main(action_id, input_video_file, out_video_file, out_json_file, out_warped_
             track_cls_ids = np.array(track_cls_ids)
             track_keypoints = np.array(track_keypoints)
             tracks = tracker.update((detections,track_cls_ids,track_keypoints))
-            track_count = 1
             for track in tracks:
                 track_id = track.track_id
-                track_id = str(track_count)
-                track_count += 1
-                bbox = track.tlbr  # 边界框 [x1, y1, x2, y2]
-                # 在原始帧上绘制边界框和跟踪 ID
-                box_thickness = max(1, int(2 * scale))
-                if mirror_flag:
-                    frame = cv2.flip(frame, 1)
-                    orig_frame = frame
-                    original_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-                    cv2.rectangle(orig_frame, (original_width - int(bbox[0]), int(bbox[1])),
-                                (original_width - int(bbox[2]), int(bbox[3])), (0, 255, 0), box_thickness)
-                    
-                    text_to_draw = f"ID: {track_id}"
-                    font = cv2.FONT_HERSHEY_SIMPLEX
-                    font_scale = 1.5 * scale
-                    # font_thickness = 3
-                    font_thickness = max(1, int(3 * scale))
-                    text_color = (0, 0, 0) # BGR Black
+                id_frame_counter[track_id] += 1
+            # 确定当前帧数最多的ID（在整个视频中）
+            if id_frame_counter:
+                max_id = max(id_frame_counter, key=id_frame_counter.get)
+            else:
+                max_id = None
 
-                    # 先获取文本尺寸，以便精确定位
-                    (text_w, text_h), baseline = cv2.getTextSize(text_to_draw, font, font_scale, font_thickness)
-                    padding = 10
-                    # 正常视频，标签画在框的左边
-                    text_x = original_width - int(bbox[2]) - text_w - padding
-                    
-                    # y坐标: 在框顶部向下的1/5 (20%) 高度处
-                    text_y = int(bbox[1] + (bbox[3] - bbox[1]) * 0.2)
-                    text_pos = (text_x, text_y)
-                    cv2.putText(orig_frame, text_to_draw, text_pos, font, font_scale, text_color, font_thickness, cv2.LINE_AA)
-                    frame = cv2.flip(frame, 1)
-                    orig_frame = frame
-                else:
-                    cv2.rectangle(orig_frame, (int(bbox[0]), int(bbox[1])),
-                                (int(bbox[2]), int(bbox[3])), (0, 255, 0), box_thickness)
-                    
-                    text_to_draw = f"ID: {track_id}"
-                    font = cv2.FONT_HERSHEY_SIMPLEX
-                    font_scale = 1.5 * scale
-                    # font_thickness = 3
-                    font_thickness = max(1, int(3 * scale))
-                    text_color = (0, 0, 0) # BGR Black
+            # 现在只绘制max_id
+            for track in tracks:
+                track_id = track.track_id
 
-                    # 先获取文本尺寸，以便精确定位
-                    (text_w, text_h), baseline = cv2.getTextSize(text_to_draw, font, font_scale, font_thickness)
-                    padding = 10
-                    # 正常视频，标签画在框的左边
-                    text_x = int(bbox[0]) - text_w - padding
-                    
-                    # y坐标: 在框顶部向下的1/5 (20%) 高度处
-                    text_y = int(bbox[1] + (bbox[3] - bbox[1]) * 0.2)
-                    text_pos = (text_x, text_y)
-                    cv2.putText(orig_frame, text_to_draw, text_pos, font, font_scale, text_color, font_thickness, cv2.LINE_AA)
-                """
-                # 计算标签位置:
-                padding = 10
-                if mirror_flag:
-                    frame = cv2.flip(frame, 1)
-
-                    # 如果是镜像视频，标签应该画在框的右边，这样翻转后视觉上才在左边
-                    text_x = int(bbox[2]) + padding
-                else:
-                    # 正常视频，标签画在框的左边
-                    text_x = int(bbox[0]) - text_w - padding
-                
-                # y坐标: 在框顶部向下的1/5 (20%) 高度处
-                text_y = int(bbox[1] + (bbox[3] - bbox[1]) * 0.2)
-                text_pos = (text_x, text_y)
-
-                if mirror_flag:
-                    # 为了防止文字镜像，我们先在一个临时画布上绘制文字，
-                    # 然后水平翻转这个画布，再把它叠加到主画面上。
-                    
-                    # 1. 获取文字尺寸
-                    (text_w, text_h), baseline = cv2.getTextSize(text_to_draw, font, font_scale, font_thickness)
-
-                    # 2. 创建一个足够大的临时画布 (黑色背景)
-                    text_canvas = np.zeros((text_h + baseline, text_w, 3), np.uint8)
-
-                    # 3. 在画布上绘制【白色】文字，以便生成正确的掩码
-                    cv2.putText(text_canvas, text_to_draw, (0, text_h), font, font_scale, (255, 255, 255), max(1, int(font_thickness * scale)), cv2.LINE_AA)
-                    
-                    # 4. 水平翻转文字画布
-                    text_canvas = cv2.flip(text_canvas, 1)
-
-                    # 5. 计算要粘贴到主图像上的位置
-                    x, y_baseline = text_pos
-                    y_top = y_baseline - text_h # 文字框的顶部y坐标
-                    
-                    # 确保ROI在图像范围内
-                    if (y_top >= 0 and x >= 0 and
-                        y_top + text_canvas.shape[0] <= orig_frame.shape[0] and
-                        x + text_canvas.shape[1] <= orig_frame.shape[1]):
+                # 只绘制帧数最多的ID
+                if track_id == max_id:
+                    bbox = track.tlbr  # 边界框 [x1, y1, x2, y2]
+                    """
+                    # 在原始帧上绘制边界框和跟踪 ID
+                    box_thickness = max(1, int(2 * scale))
+                    if mirror_flag:
+                        frame = cv2.flip(frame, 1)
+                        orig_frame = frame
+                        original_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+                        cv2.rectangle(orig_frame, (original_width - int(bbox[0]), int(bbox[1])),
+                                    (original_width - int(bbox[2]), int(bbox[3])), (0, 255, 0), box_thickness)
                         
-                        roi = orig_frame[y_top : y_top + text_canvas.shape[0], x : x + text_canvas.shape[1]]
+                        text_to_draw = f"ID: {track_id}"
+                        font = cv2.FONT_HERSHEY_SIMPLEX
+                        font_scale = 1 * scale
+                        # font_thickness = 2
+                        font_thickness = max(1, int(2 * scale))
+                        text_color = (0, 0, 0) # BGR Black
+
+                        # 先获取文本尺寸，以便精确定位
+                        (text_w, text_h), baseline = cv2.getTextSize(text_to_draw, font, font_scale, font_thickness)
+                        padding = 10
+                        # 正常视频，标签画在框的左边
+                        text_x = original_width - int(bbox[2]) - text_w - padding
                         
-                        # 6. 创建掩码，现在可以正确选择出白色文字了
-                        text_gray = cv2.cvtColor(text_canvas, cv2.COLOR_BGR2GRAY)
-                        _, mask = cv2.threshold(text_gray, 0, 255, cv2.THRESH_BINARY)
-                        mask_inv = cv2.bitwise_not(mask)
-                        
-                        # 7. 融合：
-                        #   - 从ROI中抠出文字区域，得到背景
-                        bg = cv2.bitwise_and(roi, roi, mask=mask_inv)
-                        
-                        #   - 创建一个纯色的前景，颜色为最终想要的文字颜色
-                        fg_colored = np.full(roi.shape, text_color, dtype=np.uint8)
-                        
-                        #   - 只在掩码区域（文字区域）应用这个颜色
-                        fg = cv2.bitwise_and(fg_colored, fg_colored, mask=mask)
-                        
-                        #   - 相加得到最终结果
-                        dst = cv2.add(bg, fg)
-                        orig_frame[y_top : y_top + text_canvas.shape[0], x : x + text_canvas.shape[1]] = dst
-                    else: # ROI 超出边界，使用简单绘制 (这种情况下文字会被镜像)
+                        # y坐标: 在框顶部向下的1/5 (20%) 高度处
+                        text_y = int(bbox[1] + (bbox[3] - bbox[1]) * 0.2)
+                        text_pos = (text_x, text_y)
                         cv2.putText(orig_frame, text_to_draw, text_pos, font, font_scale, text_color, font_thickness, cv2.LINE_AA)
-                else:
-                    cv2.putText(orig_frame, text_to_draw, text_pos, font, font_scale, text_color, font_thickness, cv2.LINE_AA)
-"""
-                cls_id = track.cls_id  # 类别ID
-                keypoints_ = track.keypoints  # 关键点数据
-                # for idx, box in enumerate(results.boxes):   
-                # cls_name = results.names[cls_id]
-                # keypoints_ = results.keypoints[idx].xy[0].cpu().numpy()
-                keypoints = np.zeros((8, 2), dtype=np.float32)  # 左肩、右肩、左髋、右髋、左膝、右膝、左脚踝、右脚踝
-                if len(keypoints_) >= 17:  # COCO关键点模型
-                    keypoints[0] = keypoints_[5]   # 左肩
-                    keypoints[1] = keypoints_[6]   # 右肩
-                    keypoints[2] = keypoints_[11]  # 左髋
-                    keypoints[3] = keypoints_[12]  # 右髋
-                    keypoints[4] = keypoints_[13]  # 左膝
-                    keypoints[5] = keypoints_[14]  # 右膝
-                    keypoints[6] = keypoints_[15]  # 左脚踝
-                    keypoints[7] = keypoints_[16]  # 右脚踝
+                        frame = cv2.flip(frame, 1)
+                        orig_frame = frame
+                    else:
+                        cv2.rectangle(orig_frame, (int(bbox[0]), int(bbox[1])),
+                                    (int(bbox[2]), int(bbox[3])), (0, 255, 0), box_thickness)
+                        
+                        text_to_draw = f"ID: {track_id}"
+                        font = cv2.FONT_HERSHEY_SIMPLEX
+                        font_scale = 1 * scale
+                        # font_thickness = 2
+                        font_thickness = max(1, int(2 * scale))
+                        text_color = (0, 0, 0) # BGR Black
+
+                        # 先获取文本尺寸，以便精确定位
+                        (text_w, text_h), baseline = cv2.getTextSize(text_to_draw, font, font_scale, font_thickness)
+                        padding = 10
+                        # 正常视频，标签画在框的左边
+                        text_x = int(bbox[0]) - text_w - padding
+                        
+                        # y坐标: 在框顶部向下的1/5 (20%) 高度处
+                        text_y = int(bbox[1] + (bbox[3] - bbox[1]) * 0.2)
+                        text_pos = (text_x, text_y)
+                        cv2.putText(orig_frame, text_to_draw, text_pos, font, font_scale, text_color, font_thickness, cv2.LINE_AA)
+                    """
+                    """
+                    # 计算标签位置:
+                    padding = 10
+                    if mirror_flag:
+                        frame = cv2.flip(frame, 1)
+
+                        # 如果是镜像视频，标签应该画在框的右边，这样翻转后视觉上才在左边
+                        text_x = int(bbox[2]) + padding
+                    else:
+                        # 正常视频，标签画在框的左边
+                        text_x = int(bbox[0]) - text_w - padding
                     
-                else:
-                    pass  # 处理检测失败的情况
-                
-                
-                if M is not None and key_points: # and frame_count < 3 * fps
-                    marker_radius = max(1, int(5 * scale))
-                    line_thickness = max(1, int(2 * scale))
-                    for i, pt in enumerate(key_points):
-                        cv2.circle(orig_frame, pt, marker_radius, (0, 255, 0), -1)
-                        # cv2.putText(orig_frame, str(i+1), pt, cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
-                    cv2.line(orig_frame, key_points[0], key_points[1], (0, 255, 255), line_thickness)
-                    cv2.line(orig_frame, key_points[1], key_points[2], (0, 255, 255), line_thickness)
-                    cv2.line(orig_frame, key_points[2], key_points[3], (0, 255, 255), line_thickness)
-                    cv2.line(orig_frame, key_points[3], key_points[0], (0, 255, 255), line_thickness)
-                
-                if len(keypoints_) > 0:
-                    keypoint_radius = max(1, int(8 * scale))
-                    bone_thickness = max(1, int(4 * scale))
-                    for i, (x, y) in enumerate(keypoints_):
-                        if i in [5, 6, 11, 12, 13, 14, 15, 16]:
-                            color = (255, 0, 0) if i in [5, 11, 13, 15] else (0, 0, 255) if i in [6, 12, 14, 16] else (255, 0, 0)
-                            cv2.circle(orig_frame, (int(x), int(y)), keypoint_radius, color, -1)
-                    if len(keypoints_) >= 17:
-                        if np.all(keypoints_[5]) and np.all(keypoints_[6]):
-                            cv2.line(orig_frame, (int(keypoints_[5, 0]), int(keypoints_[5, 1])), 
-                                (int(keypoints_[6, 0]), int(keypoints_[6, 1])), (0, 255, 0), bone_thickness)
-                        if np.all(keypoints_[11]) and np.all(keypoints_[12]):
-                            cv2.line(orig_frame, (int(keypoints_[11, 0]), int(keypoints_[11, 1])), 
-                                (int(keypoints_[12, 0]), int(keypoints_[12, 1])), (0, 255, 0), bone_thickness)
-                        if np.all(keypoints_[5]) and np.all(keypoints_[11]):
-                            cv2.line(orig_frame, (int(keypoints_[5, 0]), int(keypoints_[5, 1])), 
-                                (int(keypoints_[11, 0]), int(keypoints_[11, 1])), (0, 255, 0), bone_thickness)
-                        if np.all(keypoints_[11]) and np.all(keypoints_[13]):
-                            cv2.line(orig_frame, (int(keypoints_[11, 0]), int(keypoints_[11, 1])),
-                                (int(keypoints_[13, 0]), int(keypoints_[13, 1])), (255, 0, 0), bone_thickness)
-                        if np.all(keypoints_[13]) and np.all(keypoints_[15]):
-                            cv2.line(orig_frame, (int(keypoints_[13, 0]), int(keypoints_[13, 1])), 
-                                (int(keypoints_[15, 0]), int(keypoints_[15, 1])), (255, 0, 0), bone_thickness)
-                        if np.all(keypoints_[6]) and np.all(keypoints_[12]):
-                            cv2.line(orig_frame, (int(keypoints_[6, 0]), int(keypoints_[6, 1])),
+                    # y坐标: 在框顶部向下的1/5 (20%) 高度处
+                    text_y = int(bbox[1] + (bbox[3] - bbox[1]) * 0.2)
+                    text_pos = (text_x, text_y)
+
+                    if mirror_flag:
+                        # 为了防止文字镜像，我们先在一个临时画布上绘制文字，
+                        # 然后水平翻转这个画布，再把它叠加到主画面上。
+                        
+                        # 1. 获取文字尺寸
+                        (text_w, text_h), baseline = cv2.getTextSize(text_to_draw, font, font_scale, font_thickness)
+
+                        # 2. 创建一个足够大的临时画布 (黑色背景)
+                        text_canvas = np.zeros((text_h + baseline, text_w, 3), np.uint8)
+
+                        # 3. 在画布上绘制【白色】文字，以便生成正确的掩码
+                        cv2.putText(text_canvas, text_to_draw, (0, text_h), font, font_scale, (255, 255, 255), max(1, int(font_thickness * scale)), cv2.LINE_AA)
+                        
+                        # 4. 水平翻转文字画布
+                        text_canvas = cv2.flip(text_canvas, 1)
+
+                        # 5. 计算要粘贴到主图像上的位置
+                        x, y_baseline = text_pos
+                        y_top = y_baseline - text_h # 文字框的顶部y坐标
+                        
+                        # 确保ROI在图像范围内
+                        if (y_top >= 0 and x >= 0 and
+                            y_top + text_canvas.shape[0] <= orig_frame.shape[0] and
+                            x + text_canvas.shape[1] <= orig_frame.shape[1]):
+                            
+                            roi = orig_frame[y_top : y_top + text_canvas.shape[0], x : x + text_canvas.shape[1]]
+                            
+                            # 6. 创建掩码，现在可以正确选择出白色文字了
+                            text_gray = cv2.cvtColor(text_canvas, cv2.COLOR_BGR2GRAY)
+                            _, mask = cv2.threshold(text_gray, 0, 255, cv2.THRESH_BINARY)
+                            mask_inv = cv2.bitwise_not(mask)
+                            
+                            # 7. 融合：
+                            #   - 从ROI中抠出文字区域，得到背景
+                            bg = cv2.bitwise_and(roi, roi, mask=mask_inv)
+                            
+                            #   - 创建一个纯色的前景，颜色为最终想要的文字颜色
+                            fg_colored = np.full(roi.shape, text_color, dtype=np.uint8)
+                            
+                            #   - 只在掩码区域（文字区域）应用这个颜色
+                            fg = cv2.bitwise_and(fg_colored, fg_colored, mask=mask)
+                            
+                            #   - 相加得到最终结果
+                            dst = cv2.add(bg, fg)
+                            orig_frame[y_top : y_top + text_canvas.shape[0], x : x + text_canvas.shape[1]] = dst
+                        else: # ROI 超出边界，使用简单绘制 (这种情况下文字会被镜像)
+                            cv2.putText(orig_frame, text_to_draw, text_pos, font, font_scale, text_color, font_thickness, cv2.LINE_AA)
+                    else:
+                        cv2.putText(orig_frame, text_to_draw, text_pos, font, font_scale, text_color, font_thickness, cv2.LINE_AA)
+                    """
+                    cls_id = track.cls_id  # 类别ID
+                    keypoints_ = track.keypoints  # 关键点数据
+                    # for idx, box in enumerate(results.boxes):   
+                    # cls_name = results.names[cls_id]
+                    # keypoints_ = results.keypoints[idx].xy[0].cpu().numpy()
+                    keypoints = np.zeros((8, 2), dtype=np.float32)  # 左肩、右肩、左髋、右髋、左膝、右膝、左脚踝、右脚踝
+                    if len(keypoints_) >= 17:  # COCO关键点模型
+                        keypoints[0] = keypoints_[5]   # 左肩
+                        keypoints[1] = keypoints_[6]   # 右肩
+                        keypoints[2] = keypoints_[11]  # 左髋
+                        keypoints[3] = keypoints_[12]  # 右髋
+                        keypoints[4] = keypoints_[13]  # 左膝
+                        keypoints[5] = keypoints_[14]  # 右膝
+                        keypoints[6] = keypoints_[15]  # 左脚踝
+                        keypoints[7] = keypoints_[16]  # 右脚踝
+                        
+                    else:
+                        pass  # 处理检测失败的情况
+                    
+                    # 绘制地面红点连线
+                    if M is not None and key_points: # and frame_count < 3 * fps
+                        marker_radius = max(1, int(5 * scale))
+                        line_thickness = max(1, int(2 * scale))
+                        for i, pt in enumerate(key_points):
+                            cv2.circle(orig_frame, pt, marker_radius, (0, 255, 0), -1)
+                            # cv2.putText(orig_frame, str(i+1), pt, cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
+                        cv2.line(orig_frame, key_points[0], key_points[1], (0, 255, 255), line_thickness)
+                        cv2.line(orig_frame, key_points[1], key_points[2], (0, 255, 255), line_thickness)
+                        cv2.line(orig_frame, key_points[2], key_points[3], (0, 255, 255), line_thickness)
+                        cv2.line(orig_frame, key_points[3], key_points[0], (0, 255, 255), line_thickness)
+                    
+                    if len(keypoints_) > 0:
+                        keypoint_radius = max(1, int(8 * scale))
+                        bone_thickness = max(1, int(4 * scale))
+                        for i, (x, y) in enumerate(keypoints_):
+                            if i in [5, 6, 11, 12, 13, 14, 15, 16]:
+                                color = (255, 0, 0) if i in [5, 11, 13, 15] else (0, 0, 255) if i in [6, 12, 14, 16] else (255, 0, 0)
+                                cv2.circle(orig_frame, (int(x), int(y)), keypoint_radius, color, -1)
+                        if len(keypoints_) >= 17:
+                            if np.all(keypoints_[5]) and np.all(keypoints_[6]):
+                                cv2.line(orig_frame, (int(keypoints_[5, 0]), int(keypoints_[5, 1])), 
+                                    (int(keypoints_[6, 0]), int(keypoints_[6, 1])), (0, 255, 0), bone_thickness)
+                            if np.all(keypoints_[11]) and np.all(keypoints_[12]):
+                                cv2.line(orig_frame, (int(keypoints_[11, 0]), int(keypoints_[11, 1])), 
                                     (int(keypoints_[12, 0]), int(keypoints_[12, 1])), (0, 255, 0), bone_thickness)
-                        if np.all(keypoints_[12]) and np.all(keypoints_[14]):
-                            cv2.line(orig_frame, (int(keypoints_[12, 0]), int(keypoints_[12, 1])),
-                                    (int(keypoints_[14, 0]), int(keypoints_[14, 1])), (0, 0, 255), bone_thickness)
-                        if np.all(keypoints_[14]) and np.all(keypoints_[16]):
-                            cv2.line(orig_frame, (int(keypoints_[14, 0]), int(keypoints_[14, 1])), 
-                                (int(keypoints_[16, 0]), int(keypoints_[16, 1])), (0, 0, 255), bone_thickness)
-                data[track_id].append(keypoints)
+                            if np.all(keypoints_[5]) and np.all(keypoints_[11]):
+                                cv2.line(orig_frame, (int(keypoints_[5, 0]), int(keypoints_[5, 1])), 
+                                    (int(keypoints_[11, 0]), int(keypoints_[11, 1])), (0, 255, 0), bone_thickness)
+                            if np.all(keypoints_[11]) and np.all(keypoints_[13]):
+                                cv2.line(orig_frame, (int(keypoints_[11, 0]), int(keypoints_[11, 1])),
+                                    (int(keypoints_[13, 0]), int(keypoints_[13, 1])), (255, 0, 0), bone_thickness)
+                            if np.all(keypoints_[13]) and np.all(keypoints_[15]):
+                                cv2.line(orig_frame, (int(keypoints_[13, 0]), int(keypoints_[13, 1])), 
+                                    (int(keypoints_[15, 0]), int(keypoints_[15, 1])), (255, 0, 0), bone_thickness)
+                            if np.all(keypoints_[6]) and np.all(keypoints_[12]):
+                                cv2.line(orig_frame, (int(keypoints_[6, 0]), int(keypoints_[6, 1])),
+                                        (int(keypoints_[12, 0]), int(keypoints_[12, 1])), (0, 255, 0), bone_thickness)
+                            if np.all(keypoints_[12]) and np.all(keypoints_[14]):
+                                cv2.line(orig_frame, (int(keypoints_[12, 0]), int(keypoints_[12, 1])),
+                                        (int(keypoints_[14, 0]), int(keypoints_[14, 1])), (0, 0, 255), bone_thickness)
+                            if np.all(keypoints_[14]) and np.all(keypoints_[16]):
+                                cv2.line(orig_frame, (int(keypoints_[14, 0]), int(keypoints_[14, 1])), 
+                                    (int(keypoints_[16, 0]), int(keypoints_[16, 1])), (0, 0, 255), bone_thickness)
+                    data[track_id].append(keypoints)
             
             # video_writer.write(orig_frame)
             resized_orig_frame = cv2.resize(orig_frame, (1280, 720))
@@ -754,7 +769,9 @@ def main(action_id, input_video_file, out_video_file, out_json_file, out_warped_
             data = {max_id: filtered_data[max_id]}
         else:
             data = {}
-        
+        # 保存最终确定的max_id用于渲染
+        final_max_id = max_id
+
         # 保存左右脚脚踝关键点坐标（只保存左右脚踝）
     
         print(f"Video processing completed. Total frames: {frame_count}")
@@ -877,6 +894,7 @@ def main(action_id, input_video_file, out_video_file, out_json_file, out_warped_
                 # 绘制文字
                 cv2.putText(frame, text, (text_x, text_y), font, font_scale, text_color, thickness)
                 
+                """
                 if id_counts:
                     sorted_ids = sorted(id_counts.keys())
                     for track_id in sorted_ids:
@@ -893,6 +911,7 @@ def main(action_id, input_video_file, out_video_file, out_json_file, out_warped_
                                     background_color, -1)
                         # 绘制文字
                         cv2.putText(frame, id_text, (text_x, text_y), font, font_scale, text_color, thickness)
+                """
 
                 # 第三行文字
                 text_y += 40
@@ -994,9 +1013,12 @@ def main(action_id, input_video_file, out_video_file, out_json_file, out_warped_
                 print(f"Error calculating output for key {key}, skipping...")
                 continue
             smoothed_speed = [{'time': t, 'right_speed': rs} for t, rs in zip(times, right_speed)]
-            # 只传递当前处理的ID的帧数
-            final_id_count = {key: id_frame_counts.get(key)}
-            # 渲染参数到视频，必须用mid_video_file作为输入
+            
+            if final_max_id is not None and final_max_id in id_frame_counts:
+                final_id_count = {final_max_id: id_frame_counts[final_max_id]}
+            else:
+                final_id_count = None
+
             render_parameters_to_video(mid_video_file, out_video_file, scaled_data, smoothed_speed, result, mirror_flag, final_id_count)
             os.system(
                 f"ffmpeg -y -i {out_video_file} -c:v libx264 -c:a aac -pix_fmt yuv420p {out_video_file.replace('.mp4', '_final.mp4')}")
