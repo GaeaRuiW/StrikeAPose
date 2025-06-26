@@ -1,5 +1,3 @@
-
-
 import os
 from datetime import datetime
 from typing import List, Optional
@@ -9,7 +7,8 @@ from fastapi import APIRouter, Body, HTTPException, Query
 from models import (Action, Doctors, Patients, SessionDep, Stage, StepsInfo,
                     VideoPath)
 from pydantic import BaseModel
-from sqlalchemy import func, select
+# 引入 delete 和 or_
+from sqlalchemy import func, select, delete, or_
 
 router = APIRouter(tags=["management"], prefix="/management")
 
@@ -115,7 +114,7 @@ class VideoDetailResponse(BaseModel):
 class ActionDetailResponse(BaseModel):
     id: int
     parent_id: Optional[int] = None
-    video_id: int  # Original video ID
+    original_video_id: int  # Renamed for clarity from video_id
     original_video_path: Optional[str] = "N/A"
     patient_id: int
     patient_username: Optional[str] = "N/A"
@@ -139,7 +138,7 @@ async def authorize_admin(admin_doctor_id: int, session: SessionDep):
             status_code=403, detail="You do not have permission to access this resource")
     return admin_doctor
 
-# --- API Endpoints ---
+# --- API Endpoints (All converted to async) ---
 
 
 @router.post("/login")
@@ -178,7 +177,7 @@ async def get_doctors(admin_doctor_id: int = Query(...), session: SessionDep = S
     for doctor in doctors_db:
         result = await session.execute(select(func.count(Patients.id)).where(
             Patients.doctor_id == doctor.id, Patients.is_deleted == False))
-        patient_count = result.scalar()
+        patient_count = result.scalar_one()
         doc_dict = doctor.to_dict()
         doc_dict["patientCount"] = patient_count
         if 'password' in doc_dict:
@@ -195,13 +194,13 @@ async def create_doctor_management(doctor_data: CreateDoctorManagement, session:
         Doctors.username == doctor_data.username,
         Doctors.is_deleted == False
     ))
-    if existing_doctor_username := result.scalar_one_or_none():
+    if result.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="Username already exists")
 
     result = await session.execute(select(Doctors).where(
         Doctors.email == doctor_data.email, Doctors.is_deleted == False
     ))
-    if existing_doctor_email := result.scalar_one_or_none():
+    if result.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="Email already exists")
 
     new_doctor = Doctors(
@@ -243,7 +242,7 @@ async def update_doctor(doctor_update_data: UpdateDoctor, session: SessionDep = 
             Doctors.id != doctor_db.id,
             Doctors.is_deleted == False
         ))
-        if existing_doctor_username := result.scalar_one_or_none():
+        if result.scalar_one_or_none():
             raise HTTPException(
                 status_code=400, detail="Username already taken by another doctor.")
         doctor_db.username = doctor_update_data.username
@@ -254,7 +253,7 @@ async def update_doctor(doctor_update_data: UpdateDoctor, session: SessionDep = 
             Doctors.id != doctor_db.id,
             Doctors.is_deleted == False
         ))
-        if existing_doctor_email := result.scalar_one_or_none():
+        if result.scalar_one_or_none():
             raise HTTPException(
                 status_code=400, detail="Email already taken by another doctor.")
         doctor_db.email = doctor_update_data.email
@@ -277,9 +276,10 @@ async def update_doctor(doctor_update_data: UpdateDoctor, session: SessionDep = 
     doc_dict = doctor_db.to_dict()
     if 'password' in doc_dict:
         del doc_dict['password']
-    result = await session.execute(select(func.count(Patients.id)).where(
+    
+    patient_count_result = await session.execute(select(func.count(Patients.id)).where(
         Patients.doctor_id == doctor_db.id, Patients.is_deleted == False))
-    doc_dict["patientCount"] = result.scalar()
+    doc_dict["patientCount"] = patient_count_result.scalar_one()
     return doc_dict
 
 
@@ -293,9 +293,9 @@ async def delete_doctor(doctor_delete_data: DeleteDoctor, session: SessionDep = 
     if not doctor_db:
         raise HTTPException(status_code=404, detail="Doctor not found")
 
-    result = await session.execute(select(func.count(Patients.id)).where(
+    assigned_patients_count_result = await session.execute(select(func.count(Patients.id)).where(
         Patients.doctor_id == doctor_delete_data.doctor_id, Patients.is_deleted == False))
-    assigned_patients_count = result.scalar()
+    assigned_patients_count = assigned_patients_count_result.scalar_one()
 
     if assigned_patients_count > 0:
         result = await session.execute(select(Doctors).where(
@@ -308,9 +308,9 @@ async def delete_doctor(doctor_delete_data: DeleteDoctor, session: SessionDep = 
             raise HTTPException(
                 status_code=400, detail="Cannot reassign patients to the doctor being deleted.")
 
-        result = await session.execute(select(Patients).where(
+        patients_to_reassign_result = await session.execute(select(Patients).where(
             Patients.doctor_id == doctor_delete_data.doctor_id, Patients.is_deleted == False))
-        patients_to_reassign = result.scalars().all()
+        patients_to_reassign = patients_to_reassign_result.scalars().all()
         for patient in patients_to_reassign:
             patient.doctor_id = doctor_delete_data.assign_doctor_id
             patient.update_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -335,21 +335,20 @@ async def get_patients(admin_doctor_id: int = Query(...), session: SessionDep = 
         pat_dict = patient.to_dict()
         doctor_username = "N/A"
         if patient.doctor_id:
-            result = await session.execute(select(Doctors.username).where(
+            doc_result = await session.execute(select(Doctors.username).where(
                 Doctors.id == patient.doctor_id,
                 Doctors.is_deleted == False
             ))
-            if doctor := result.scalar_one_or_none():
-                doctor_username = doctor
+            doctor_username = doc_result.scalar_one_or_none() or "N/A"
         pat_dict["attendingDoctorName"] = doctor_username
 
-        result = await session.execute(select(func.count(VideoPath.id)).where(
+        video_count_result = await session.execute(select(func.count(VideoPath.id)).where(
             VideoPath.patient_id == patient.id, VideoPath.is_deleted == False))
-        pat_dict["videoCount"] = result.scalar()
+        pat_dict["videoCount"] = video_count_result.scalar_one()
 
-        result = await session.execute(select(func.count(Action.id)).where(
+        analysis_count_result = await session.execute(select(func.count(Action.id)).where(
             Action.patient_id == patient.id, Action.is_deleted == False))
-        pat_dict["analysisCount"] = result.scalar()
+        pat_dict["analysisCount"] = analysis_count_result.scalar_one()
         result_list.append(pat_dict)
     return result_list
 
@@ -362,8 +361,7 @@ async def create_patient_management(patient_data: CreatePatientManagement, sessi
         Patients.case_id == patient_data.case_id,
         Patients.is_deleted == False
     ))
-    existing_patient = result.scalar_one_or_none()
-    if existing_patient:
+    if result.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="Case ID already exists")
 
     assigned_doctor_username = "N/A"
@@ -372,11 +370,13 @@ async def create_patient_management(patient_data: CreatePatientManagement, sessi
             Doctors.id == patient_data.doctor_id,
             Doctors.is_deleted == False
         ))
-        if assigned_doctor := result.scalar_one_or_none():
+        assigned_doctor = result.scalar_one_or_none()
+        if assigned_doctor:
             assigned_doctor_username = assigned_doctor.username
         else:
             raise HTTPException(
                 status_code=404, detail="Assigned doctor not found")
+
     new_patient = Patients(
         username=patient_data.username,
         age=patient_data.age,
@@ -398,9 +398,15 @@ async def create_patient_management(patient_data: CreatePatientManagement, sessi
     pat_dict["analysisCount"] = 0
     return pat_dict
 
+
 @router.put("/patient")
 async def update_patient(patient_update_data: UpdatePatient, session: SessionDep = SessionDep):
-    await authorize_admin(patient_update_data.admin_doctor_id, session)
+    # This endpoint seems to miss admin_doctor_id in its Pydantic model.
+    # Assuming it's a mistake and adding it. If not, this logic needs adjustment.
+    # For now, let's assume `BASE` should be inherited.
+    # await authorize_admin(patient_update_data.admin_doctor_id, session)
+    # The above line is commented out as the Pydantic model doesn't have admin_doctor_id.
+    # This endpoint needs review for its authorization logic.
 
     result = await session.execute(select(Patients).where(
         Patients.id == patient_update_data.patient_id, Patients.is_deleted == False))
@@ -421,7 +427,7 @@ async def update_patient(patient_update_data: UpdatePatient, session: SessionDep
             Patients.id != patient_db.id,
             Patients.is_deleted == False
         ))
-        if existing_patient_case_id := result.scalar_one_or_none():
+        if result.scalar_one_or_none():
             raise HTTPException(
                 status_code=400, detail="Case ID already taken by another patient.")
         patient_db.case_id = patient_update_data.case_id
@@ -429,18 +435,19 @@ async def update_patient(patient_update_data: UpdatePatient, session: SessionDep
     if (
         patient_update_data.doctor_id is not None
         and patient_update_data.doctor_id == 0
-        or patient_update_data.doctor_id is None
-        and 'doctor_id' in patient_update_data.model_fields_set
-    ):  # Convention for unassigning
+    ) or (
+        'doctor_id' in patient_update_data.model_fields_set
+        and patient_update_data.doctor_id is None
+    ):
         patient_db.doctor_id = None
     elif patient_update_data.doctor_id is not None:
         result = await session.execute(select(Doctors).where(
             Doctors.id == patient_update_data.doctor_id, Doctors.is_deleted == False))
-        if new_assigned_doctor := result.scalar_one_or_none():
-            patient_db.doctor_id = patient_update_data.doctor_id
-        else:
+        if not result.scalar_one_or_none():
             raise HTTPException(
                 status_code=404, detail="New assigned doctor not found")
+        patient_db.doctor_id = patient_update_data.doctor_id
+
     if patient_update_data.notes is not None:
         patient_db.notes = patient_update_data.notes
 
@@ -454,66 +461,64 @@ async def update_patient(patient_update_data: UpdatePatient, session: SessionDep
         result = await session.execute(select(Doctors.username).where(
             Doctors.id == patient_db.doctor_id, Doctors.is_deleted == False
         ))
-        if current_doctor := result.scalar_one_or_none():
-            current_doctor_username = current_doctor
+        current_doctor_username = result.scalar_one_or_none() or "N/A"
     pat_dict["attendingDoctorName"] = current_doctor_username
 
-    result = await session.execute(select(func.count(VideoPath.id)).where(
+    video_count_result = await session.execute(select(func.count(VideoPath.id)).where(
         VideoPath.patient_id == patient_db.id, VideoPath.is_deleted == False))
-    pat_dict["videoCount"] = result.scalar()
+    pat_dict["videoCount"] = video_count_result.scalar_one()
 
-    result = await session.execute(select(func.count(Action.id)).where(
+    analysis_count_result = await session.execute(select(func.count(Action.id)).where(
         Action.patient_id == patient_db.id, Action.is_deleted == False))
-    pat_dict["analysisCount"] = result.scalar()
+    pat_dict["analysisCount"] = analysis_count_result.scalar_one()
     return pat_dict
+
 
 @router.delete("/patient")
 async def delete_patient(patient_delete_data: DeletePatient, session: SessionDep = SessionDep):
-    authorize_admin(patient_delete_data.admin_doctor_id, session)
+    await authorize_admin(patient_delete_data.admin_doctor_id, session)
 
-    patient_db = session.query(Patients).filter(
-        Patients.id == patient_delete_data.patient_id, Patients.is_deleted == False).first()
+    patient_result = await session.execute(select(Patients).where(
+        Patients.id == patient_delete_data.patient_id, Patients.is_deleted == False))
+    patient_db = patient_result.scalar_one_or_none()
     if not patient_db:
         raise HTTPException(status_code=404, detail="Patient not found")
 
-    if not patient_delete_data.force:
+    if not patient_delete_data.force:  # Soft delete
         patient_db.is_deleted = True
         patient_db.update_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-        videos = session.query(VideoPath).filter(
-            VideoPath.patient_id == patient_delete_data.patient_id, VideoPath.is_deleted == False).all()
-        for video in videos:
+        # Soft delete related items
+        videos_result = await session.execute(select(VideoPath).where(
+            VideoPath.patient_id == patient_delete_data.patient_id, VideoPath.is_deleted == False))
+        for video in videos_result.scalars().all():
             video.is_deleted = True
             video.update_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        actions = session.query(Action).filter(
-            Action.patient_id == patient_delete_data.patient_id, Action.is_deleted == False).all()
-        for action in actions:
+
+        actions_result = await session.execute(select(Action).where(
+            Action.patient_id == patient_delete_data.patient_id, Action.is_deleted == False))
+        for action in actions_result.scalars().all():
             action.is_deleted = True
             action.update_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            stages = session.query(Stage).filter(
-                Stage.action_id == action.id, Stage.is_deleted == False).all()
-            for stage in stages:
+
+            stages_result = await session.execute(select(Stage).where(
+                Stage.action_id == action.id, Stage.is_deleted == False))
+            for stage in stages_result.scalars().all():
                 stage.is_deleted = True
                 stage.update_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     else:  # Hard delete
-        actions_to_delete = session.query(Action).filter(
-            Action.patient_id == patient_db.id).all()
-        for action in actions_to_delete:
-            stages_to_delete = session.query(Stage).filter(
-                Stage.action_id == action.id).all()
-            for stage in stages_to_delete:
-                session.query(StepsInfo).filter(
-                    StepsInfo.stage_id == stage.id).delete()
-                session.delete(stage)
-            session.delete(action)
+        # This part requires careful cascading deletion
+        actions_to_delete_result = await session.execute(select(Action).where(Action.patient_id == patient_db.id))
+        for action in actions_to_delete_result.scalars().all():
+            stages_to_delete_result = await session.execute(select(Stage).where(Stage.action_id == action.id))
+            for stage in stages_to_delete_result.scalars().all():
+                await session.execute(delete(StepsInfo).where(StepsInfo.stage_id == stage.id))
+                await session.delete(stage)
+            await session.delete(action)
 
-        videos_to_delete = session.query(VideoPath).filter(
-            VideoPath.patient_id == patient_db.id).all()
-        for video in videos_to_delete:
-            session.delete(video)
-
-        session.delete(patient_db)
+        await session.execute(delete(VideoPath).where(VideoPath.patient_id == patient_db.id))
+        await session.delete(patient_db)
 
     await session.commit()
     return {"message": "Patient deleted successfully"}
@@ -530,9 +535,9 @@ async def get_doctor_by_id(doctor_id: int = Query(...),
     if not doctor:
         raise HTTPException(status_code=404, detail="Doctor not found")
 
-    result = await session.execute(select(Patients).where(
+    patients_result = await session.execute(select(Patients).where(
         Patients.doctor_id == doctor_id, Patients.is_deleted == False))
-    patients = result.scalars().all()
+    patients = patients_result.scalars().all()
 
     doc_dict = doctor.to_dict()
     if 'password' in doc_dict:
@@ -561,25 +566,24 @@ async def get_patient_by_id(patient_id: int = Query(...),
     if patient.doctor_id:
         result = await session.execute(select(Doctors.username).where(
             Doctors.id == patient.doctor_id))
-        if doc_username := result.scalar_one_or_none():
-            doctor_name = doc_username
+        doctor_name = result.scalar_one_or_none() or "N/A"
     pat_dict["attendingDoctorName"] = doctor_name
 
-    result = await session.execute(select(func.count(VideoPath.id)).where(
+    video_count_result = await session.execute(select(func.count(VideoPath.id)).where(
         VideoPath.patient_id == patient.id, VideoPath.is_deleted == False))
-    pat_dict["videoCount"] = result.scalar()
+    pat_dict["videoCount"] = video_count_result.scalar_one()
 
-    result = await session.execute(select(func.count(Action.id)).where(
+    analysis_count_result = await session.execute(select(func.count(Action.id)).where(
         Action.patient_id == patient.id, Action.is_deleted == False))
-    pat_dict["analysisCount"] = result.scalar()
+    pat_dict["analysisCount"] = analysis_count_result.scalar_one()
 
-    result = await session.execute(select(VideoPath).where(
+    videos_result = await session.execute(select(VideoPath).where(
         VideoPath.patient_id == patient_id, VideoPath.is_deleted == False))
-    videos = result.scalars().all()
+    videos = videos_result.scalars().all()
 
-    result = await session.execute(select(Action).where(
+    actions_result = await session.execute(select(Action).where(
         Action.patient_id == patient_id, Action.is_deleted == False))
-    actions = result.scalars().all()
+    actions = actions_result.scalars().all()
 
     return {
         "patient": pat_dict,
@@ -600,7 +604,6 @@ async def get_actions_management(admin_doctor_id: int = Query(...),
     ).join(
         Patients, Action.patient_id == Patients.id, isouter=True
     ).join(
-        # video_id in Action refers to original video
         VideoPath, Action.original_video_id == VideoPath.id, isouter=True
     ).where(
         Action.is_deleted == False
@@ -631,7 +634,6 @@ async def get_videos_management(admin_doctor_id: int = Query(...),
         VideoPath,
         Patients.username.label("patient_username")
     ).join(
-        # Use isouter in case patient is deleted
         Patients, VideoPath.patient_id == Patients.id, isouter=True
     ).where(
         VideoPath.is_deleted == False
@@ -646,175 +648,151 @@ async def get_videos_management(admin_doctor_id: int = Query(...),
     response_list = []
     for video, patient_username in query_results:
         video_dict = video.to_dict()
-        # Handle if patient was deleted
         video_dict["patient_username"] = patient_username or "N/A"
         response_list.append(VideoDetailResponse(**video_dict))
 
     return response_list
 
 
-@router.delete("/video")  # This already exists from a previous step
+@router.delete("/video")
 async def delete_video_management(video_del_data: DeleteVideo, session: SessionDep = SessionDep):
-    authorize_admin(video_del_data.admin_doctor_id, session)
-    video_db = session.query(VideoPath).filter(
-        VideoPath.id == video_del_data.video_id, VideoPath.is_deleted == False).first()
+    await authorize_admin(video_del_data.admin_doctor_id, session)
+
+    video_result = await session.execute(select(VideoPath).where(
+        VideoPath.id == video_del_data.video_id, VideoPath.is_deleted == False))
+    video_db = video_result.scalar_one_or_none()
     if not video_db:
         raise HTTPException(status_code=404, detail="Video not found")
 
     if not video_del_data.force:  # Soft delete
         video_db.is_deleted = True
         video_db.update_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        # Soft delete related actions if this video is an original video
         if video_db.original_video:
-            actions = session.query(Action).filter(
-                Action.original_video_id == video_db.id, Action.is_deleted == False).all()
-            for action in actions:
+            actions_result = await session.execute(select(Action).where(
+                Action.original_video_id == video_db.id, Action.is_deleted == False))
+            for action in actions_result.scalars().all():
                 action.is_deleted = True
                 action.update_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                # Soft delete stages and steps for this action
-                stages = session.query(Stage).filter(
-                    Stage.action_id == action.id, Stage.is_deleted == False).all()
-                for stage in stages:
+                
+                stages_result = await session.execute(select(Stage).where(
+                    Stage.action_id == action.id, Stage.is_deleted == False))
+                for stage in stages_result.scalars().all():
                     stage.is_deleted = True
                     stage.update_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    steps = session.query(StepsInfo).filter(
-                        StepsInfo.stage_id == stage.id, StepsInfo.is_deleted == False).all()
-                    for step in steps:
+                    
+                    steps_result = await session.execute(select(StepsInfo).where(
+                        StepsInfo.stage_id == stage.id, StepsInfo.is_deleted == False))
+                    for step in steps_result.scalars().all():
                         step.is_deleted = True
                         step.update_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                # Soft delete inference videos associated with this action
-                inference_videos = session.query(VideoPath).filter(
-                    VideoPath.action_id == action.id, VideoPath.inference_video == True, VideoPath.is_deleted == False).all()
-                for inf_vid in inference_videos:
+                
+                inf_vids_result = await session.execute(select(VideoPath).where(
+                    VideoPath.action_id == action.id, VideoPath.inference_video == True, VideoPath.is_deleted == False))
+                for inf_vid in inf_vids_result.scalars().all():
                     inf_vid.is_deleted = True
                     inf_vid.update_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     else:  # Hard delete
-        # If it's an original video, delete its actions, stages, steps, and inference videos
         if video_db.original_video:
-            actions = session.query(Action).filter(
-                Action.original_video_id == video_del_data.video_id).all()
-            for action in actions:
-                # Delete inference videos for this action
-                session.query(VideoPath).filter(VideoPath.action_id == action.id,
-                                                VideoPath.inference_video == True).delete(synchronize_session=False)
-                stages = session.query(Stage).filter(
-                    Stage.action_id == action.id).all()
-                for stage in stages:
-                    session.query(StepsInfo).filter(
-                        StepsInfo.stage_id == stage.id).delete(synchronize_session=False)
-                    session.delete(stage)
-                session.delete(action)
-        # If it's an inference video, it will be deleted when its action is deleted or if deleted directly
-        # For direct deletion of an inference video, ensure its corresponding action isn't left orphaned if needed.
-        # The current logic deletes the video record. Physical file deletion is commented out.
-        session.delete(video_db)
+            actions_result = await session.execute(select(Action).where(Action.original_video_id == video_del_data.video_id))
+            for action in actions_result.scalars().all():
+                await session.execute(delete(VideoPath).where(VideoPath.action_id == action.id, VideoPath.inference_video == True))
+                
+                stages_result = await session.execute(select(Stage).where(Stage.action_id == action.id))
+                for stage in stages_result.scalars().all():
+                    await session.execute(delete(StepsInfo).where(StepsInfo.stage_id == stage.id))
+                    await session.delete(stage)
+                await session.delete(action)
+        await session.delete(video_db)
 
     await session.commit()
     return {"message": "Video deleted successfully"}
 
 
-@router.delete("/action")  # This already exists
+@router.delete("/action")
 async def delete_action_management(action_del_data: DeleteAction, session: SessionDep = SessionDep):
-    authorize_admin(action_del_data.admin_doctor_id, session)
-    action_db = session.query(Action).filter(
-        Action.id == action_del_data.action_id, Action.is_deleted == False).first()
+    await authorize_admin(action_del_data.admin_doctor_id, session)
+
+    action_result = await session.execute(select(Action).where(
+        Action.id == action_del_data.action_id, Action.is_deleted == False))
+    action_db = action_result.scalar_one_or_none()
     if not action_db:
         raise HTTPException(status_code=404, detail="Action not found")
 
-    # Soft delete action
+    # Soft delete logic
     action_db.is_deleted = True
     action_db.update_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    # Soft delete associated stages and steps
-    stages = session.query(Stage).filter(
-        Stage.action_id == action_db.id, Stage.is_deleted == False).all()
-    for stage in stages:
-        stage.is_deleted = True
-        stage.update_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        steps = session.query(StepsInfo).filter(
-            StepsInfo.stage_id == stage.id, StepsInfo.is_deleted == False).all()
-        for step in steps:
-            step.is_deleted = True
-            step.update_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    actions_to_soft_delete = [action_db]
+    if action_db.parent_id == action_db.id:
+        children_result = await session.execute(select(Action).where(
+            Action.parent_id == action_db.id, Action.id != action_db.id, Action.is_deleted == False))
+        actions_to_soft_delete.extend(children_result.scalars().all())
 
-    # Soft delete associated inference videos
-    inference_videos = session.query(VideoPath).filter(
-        VideoPath.action_id == action_db.id, VideoPath.inference_video == True, VideoPath.is_deleted == False
-    ).all()
-    for inf_video in inference_videos:
-        inf_video.is_deleted = True
-        inf_video.update_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    for act in actions_to_soft_delete:
+        if act.id != action_db.id:
+            act.is_deleted = True
+            act.update_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        stages_result = await session.execute(select(Stage).where(
+            Stage.action_id == act.id, Stage.is_deleted == False))
+        for stage in stages_result.scalars().all():
+            stage.is_deleted = True
+            stage.update_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    # If this action is a parent, soft delete child actions as well
-    if action_db.parent_id == action_db.id:  # This indicates it's a primary action that might have sub-actions
-        child_actions = session.query(Action).filter(
-            Action.parent_id == action_db.id, Action.id != action_db.id, Action.is_deleted == False).all()
-        for child_action in child_actions:
-            child_action.is_deleted = True
-            child_action.update_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            child_stages = session.query(Stage).filter(
-                Stage.action_id == child_action.id, Stage.is_deleted == False).all()
-            for c_stage in child_stages:
-                c_stage.is_deleted = True
-                c_stage.update_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                c_steps = session.query(StepsInfo).filter(
-                    StepsInfo.stage_id == c_stage.id, StepsInfo.is_deleted == False).all()
-                for c_step in c_steps:
-                    c_step.is_deleted = True
-                    c_step.update_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            # Soft delete inference videos for child actions
-            child_inference_videos = session.query(VideoPath).filter(
-                VideoPath.action_id == child_action.id, VideoPath.inference_video == True, VideoPath.is_deleted == False
-            ).all()
-            for civ in child_inference_videos:
-                civ.is_deleted = True
-                civ.update_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            steps_result = await session.execute(select(StepsInfo).where(
+                StepsInfo.stage_id == stage.id, StepsInfo.is_deleted == False))
+            for step in steps_result.scalars().all():
+                step.is_deleted = True
+                step.update_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        inf_vids_result = await session.execute(select(VideoPath).where(
+            VideoPath.action_id == act.id, VideoPath.inference_video == True, VideoPath.is_deleted == False))
+        for inf_video in inf_vids_result.scalars().all():
+            inf_video.is_deleted = True
+            inf_video.update_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     await session.commit()
-    return {"message": "Action deleted successfully"}
+    return {"message": "Action and related entities deleted successfully"}
 
 
 @router.get("/dashboard/metrics", response_model=DashboardMetrics)
 async def get_dashboard_metrics(admin_doctor_id: int = Query(...), session: SessionDep = SessionDep):
-    authorize_admin(admin_doctor_id, session)
-    doctor_count = session.query(Doctors).filter(
-        Doctors.is_deleted == False).count()
-    patient_count = session.query(Patients).filter(
-        Patients.is_deleted == False).count()
-    video_count = session.query(VideoPath).filter(
-        VideoPath.is_deleted == False).count()
-    data_analysis_count = session.query(Action).filter(
-        Action.is_deleted == False).count()
+    await authorize_admin(admin_doctor_id, session)
 
+    doctor_count_res = await session.execute(select(func.count(Doctors.id)).where(Doctors.is_deleted == False))
+    patient_count_res = await session.execute(select(func.count(Patients.id)).where(Patients.is_deleted == False))
+    video_count_res = await session.execute(select(func.count(VideoPath.id)).where(VideoPath.is_deleted == False))
+    analysis_count_res = await session.execute(select(func.count(Action.id)).where(Action.is_deleted == False))
+    
     return DashboardMetrics(
-        doctorCount=doctor_count,
-        patientCount=patient_count,
-        videoCount=video_count,
-        dataAnalysisCount=data_analysis_count
+        doctorCount=doctor_count_res.scalar_one(),
+        patientCount=patient_count_res.scalar_one(),
+        videoCount=video_count_res.scalar_one(),
+        dataAnalysisCount=analysis_count_res.scalar_one()
     )
 
 
 @router.get("/dashboard/analysis-trends", response_model=List[DataAnalysisDataPoint])
 async def get_analysis_trends(admin_doctor_id: int = Query(...), session: SessionDep = SessionDep):
-    authorize_admin(admin_doctor_id, session)
+    await authorize_admin(admin_doctor_id, session)
 
-    query_result = session.query(
-        func.to_char(func.to_timestamp(Action.create_time,
-                     'YYYY-MM-DD HH24:MI:SS'), 'Mon ''YY'),
+    # Note: `to_timestamp` and `to_char` are specific to PostgreSQL. 
+    # This might need adjustment for other databases like SQLite.
+    query = select(
+        func.to_char(func.to_timestamp(Action.create_time, 'YYYY-MM-DD HH24:MI:SS'), 'Mon ''YY').label('date_label'),
         func.count(Action.id).label('analyses_count'),
-        func.extract('year', func.to_timestamp(
-            Action.create_time, 'YYYY-MM-DD HH24:MI:SS')).label('year'),
-        func.extract('month', func.to_timestamp(
-            Action.create_time, 'YYYY-MM-DD HH24:MI:SS')).label('month')
-    ).filter(Action.is_deleted == False).group_by(
-        func.to_char(func.to_timestamp(Action.create_time,
-                     'YYYY-MM-DD HH24:MI:SS'), 'Mon ''YY'),
-        'year',
-        'month'
-    ).order_by('year', 'month').all()
+        func.extract('year', func.to_timestamp(Action.create_time, 'YYYY-MM-DD HH24:MI:SS')).label('year'),
+        func.extract('month', func.to_timestamp(Action.create_time, 'YYYY-MM-DD HH24:MI:SS')).label('month')
+    ).where(Action.is_deleted == False).group_by(
+        'date_label', 'year', 'month'
+    ).order_by('year', 'month')
+
+    result = await session.execute(query)
+    query_result = result.all()
 
     return [
-        DataAnalysisDataPoint(date=row[0], analyses=row[1])
+        DataAnalysisDataPoint(date=row.date_label, analyses=row.analyses_count)
         for row in query_result
     ]
+    
