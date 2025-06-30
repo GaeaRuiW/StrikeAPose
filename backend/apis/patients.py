@@ -2,9 +2,9 @@ from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Body, Query
-from models import Doctors, Patients, SessionDep, VideoPath
+from models import Doctors, Patients, SessionDep, VideoPath, Action
 from pydantic import BaseModel
-from sqlalchemy import asc, desc, func, select
+from sqlalchemy import asc, desc, func, select, update
 
 router = APIRouter(tags=["patients"], prefix="/patients")
 
@@ -14,6 +14,7 @@ class CreatePatientModel(BaseModel):
     age: int
     gender: str
     case_id: str
+    patient_id: int
     doctor_id: int
 
 
@@ -22,7 +23,8 @@ class UpdatePatientModel(BaseModel):
     gender: str
     case_id: str
     doctor_id: int
-    patient_id: int
+    patient_id: int  # 当前患者ID，用于查找患者
+    new_patient_id: int  # 新的患者ID（病历号）
     username: str
 
 
@@ -52,12 +54,23 @@ async def insert_patient(patient: CreatePatientModel = Body(..., embed=True), se
     doctor = result.scalar_one_or_none()
     if not doctor:
         return {"message": "Doctor not found"}
+
+    # 检查case_id是否已存在
     result = await session.execute(select(Patients).where(
         Patients.case_id == patient.case_id, Patients.is_deleted == False))
     if patient_ := result.scalar_one_or_none():
         return {"message": "Case ID already exists"}
+
+    # 检查patient_id是否已存在
+    result = await session.execute(select(Patients).where(
+        Patients.id == patient.patient_id, Patients.is_deleted == False))
+    if patient_ := result.scalar_one_or_none():
+        return {"message": "Patient ID already exists"}
+
     patient_obj = Patients(username=patient.username, age=patient.age, gender=patient.gender, case_id=patient.case_id, doctor_id=patient.doctor_id,
                            create_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"), update_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"), is_deleted=False)
+    # 手动设置ID
+    patient_obj.id = patient.patient_id
     session.add(patient_obj)
     await session.commit()
     # Refresh to get the ID and avoid detached instance
@@ -118,6 +131,15 @@ async def get_last_upload_video_patient(doctor_id: int, session: SessionDep = Se
     }
 
 
+@router.get("/check_patient_id_exists/{patient_id}")
+async def check_patient_id_exists(patient_id: int, session: SessionDep = SessionDep):
+    """检查病历号是否已存在"""
+    result = await session.execute(select(Patients).where(
+        Patients.id == patient_id, Patients.is_deleted == False))
+    patient = result.scalar_one_or_none()
+    return {"exists": patient is not None}
+
+
 @router.put("/update_patient_by_id")
 async def update_patient_by_id(patient: UpdatePatientModel = Body(..., embed=True), session: SessionDep = SessionDep):
     result = await session.execute(select(Doctors).where(
@@ -125,6 +147,8 @@ async def update_patient_by_id(patient: UpdatePatientModel = Body(..., embed=Tru
     doctor = result.scalar_one_or_none()
     if not doctor:
         return {"message": "Doctor not found"}
+
+    # 查找要更新的患者
     if doctor.role_id != 1:
         result = await session.execute(select(Patients).where(
             Patients.id == patient.patient_id,
@@ -136,15 +160,63 @@ async def update_patient_by_id(patient: UpdatePatientModel = Body(..., embed=Tru
     patient_ = result.scalar_one_or_none()
     if not patient_:
         return {"message": "Patient not found or this doctor does not have permission to update this patient"}
-    patient_.age = patient.age
-    patient_.gender = patient.gender
-    patient_.case_id = patient.case_id
-    patient_.doctor_id = patient.doctor_id
-    patient_.username = patient.username
-    patient_.update_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    await session.commit()
-    await session.refresh(patient_)  # Refresh to avoid detached instance
-    return patient_.to_dict()
+
+    # 如果要修改病历号，需要特殊处理
+    if patient.new_patient_id != patient.patient_id:
+        # 检查新病历号是否已存在
+        result = await session.execute(select(Patients).where(
+            Patients.id == patient.new_patient_id, Patients.is_deleted == False))
+        if result.scalar_one_or_none():
+            return {"message": "New patient ID already exists"}
+
+        # 创建新的患者记录
+        new_patient = Patients(
+            username=patient.username,
+            age=patient.age,
+            gender=patient.gender,
+            case_id=patient.case_id,
+            doctor_id=patient.doctor_id,
+            create_time=patient_.create_time,  # 保持原创建时间
+            update_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            is_deleted=False
+        )
+        new_patient.id = patient.new_patient_id
+        session.add(new_patient)
+
+        # 更新相关表的外键引用
+
+        # 更新VideoPath表
+        await session.execute(
+            update(VideoPath).where(
+                VideoPath.patient_id == patient.patient_id
+            ).values(patient_id=patient.new_patient_id)
+        )
+
+        # 更新Action表
+        await session.execute(
+            update(Action).where(
+                Action.patient_id == patient.patient_id
+            ).values(patient_id=patient.new_patient_id)
+        )
+
+        # 删除旧的患者记录
+        patient_.is_deleted = True
+
+        await session.commit()
+        await session.refresh(new_patient)
+        return new_patient.to_dict()
+    else:
+        # 如果不修改病历号，正常更新
+        patient_.age = patient.age
+        patient_.gender = patient.gender
+        patient_.case_id = patient.case_id
+        patient_.doctor_id = patient.doctor_id
+        patient_.username = patient.username
+        patient_.update_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        await session.commit()
+        await session.refresh(patient_)
+        return patient_.to_dict()
 
 
 @router.delete("/delete_patient_by_id/{patient_id}/{doctor_id}")

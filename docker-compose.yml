@@ -12,8 +12,6 @@ services:
       - POSTGRES_HOST=db
       - POSTGRES_PASSWORD=postgres
       - REDIS_HOST=redis-db
-      - NO_PROXY=localhost,127.0.0.1,db,redis-db,queue,core,downloader
-      - no_proxy=localhost,127.0.0.1,db,redis-db,queue,core,downloader
 
     container_name: pose-backend
     networks:
@@ -42,12 +40,11 @@ services:
       - db
       - redis-db
       - backend
+      - core
     environment:
       - REDIS_HOST=redis-db
       - CORE_SERVICE_HOST=core
       - BACKEND_HOST=backend
-      - NO_PROXY=localhost,127.0.0.1,db,redis-db,queue,core,downloader
-      - no_proxy=localhost,127.0.0.1,db,redis-db,queue,core,downloader
     container_name: pose-queue
     # network_mode: host 
     networks:
@@ -62,8 +59,6 @@ services:
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
       - BACKEND_HOST=backend
-      - NO_PROXY=localhost,127.0.0.1,db,redis-db,queue,core,downloader
-      - no_proxy=localhost,127.0.0.1,db,redis-db,queue,core,downloader
     container_name: pose-core   
     depends_on:
       - db

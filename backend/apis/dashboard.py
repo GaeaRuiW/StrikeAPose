@@ -9,7 +9,14 @@ from pyecharts.globals import ThemeType
 router = APIRouter(tags=["dashboard"], prefix="/dashboard")
 
 toolbox_opts = opts.global_options.ToolBoxFeatureOpts(
-    save_as_image={"show": True, "title": "save as image", "type": "png"})
+    save_as_image={"show": True, "title": "save as image", "type": "png"},
+    data_view={"show": True, "title": "data view", "lang": ["Data View", "Turn Off"]},
+    magic_type={"show": False},
+    restore={"show": False},
+    brush={"show": False},
+    data_zoom={"show": True, "title": {"zoom": "zoom", "back": "back"}, "type": ["slider", "inside"]}
+)
+
 
 async def action_exists(action_id: int, session: SessionDep = SessionDep):
     result = await session.execute(select(Action).where(

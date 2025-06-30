@@ -105,10 +105,10 @@ async def download_from_url(params: DownloadVideoFromUrl = Body(...), session: S
         video_dir, "original", f"{patient.id}-{gen_uuid}.mp4")
     async with httpx.AsyncClient() as client:
         response =  await client.post(
-            "http://pose-downloader:8080/api/download", json={"url": params.url, "output_path": output_path, "quality": "best", "info_only": False}, timeout=300
+            "http://downloader:8080/api/download", json={"url": params.url, "output_path": output_path, "quality": "best", "info_only": False}, timeout=300
         )
         if response.status_code != 200:
-            return response.json()
+            return response.json(), response.status_code
     new_video = VideoPath(
         video_path=output_path,
         patient_id=patient.id,
@@ -121,7 +121,7 @@ async def download_from_url(params: DownloadVideoFromUrl = Body(...), session: S
     )
     session.add(new_video)
     await session.commit()
-    return response.json()
+    return response.json(), response.status_code
 
 
 @router.post("/upload/{patient_id}")
@@ -216,7 +216,7 @@ async def upload_video(patient_id: int, video: UploadFile = File(...), session: 
             original_video=True,
             inference_video=False,
             is_deleted=False,
-            notes="拍摄视频",
+            notes="视频",
             create_time=current_time,
             update_time=current_time
         )
